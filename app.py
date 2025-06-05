@@ -46,41 +46,31 @@ async def vapi_webhook(request: Request):
 async def chat_completions(request: Request):
     body = await request.json()
     user_id = body.get("user_id", "default_user")
-
     model = body.get("model", "gpt-4o")
     messages = body.get("messages", [])
     temperature = body.get("temperature", 0.9)
     tools = body.get("tools", [])
     tool_choice = body.get("tool_choice", "auto")
 
-    # Load user memory
-    user_data = memory[user_id]
-    history = user_data["messages"]
-    trust_score = user_data["trust_score"]
-    facts = user_data["facts"]
-
-    # Build conversation context
+    # Full conversation context
+    history = memory[user_id]["messages"]
     full_messages = [{"role": "system", "content": JANET_PROMPT}] + history + messages
 
-    def format_sse(data):
-        return f"data: {json.dumps(data)}\n\n"
+    # Call OpenAI normally (no stream=True)
+    response = openai.chat.completions.create(
+        model=model,
+        messages=full_messages,
+        temperature=temperature,
+        tools=tools,
+        tool_choice=tool_choice,
+    )
 
-    def stream_openai():
-        response = openai.chat.completions.create(
-            model=model,
-            messages=full_messages,
-            temperature=temperature,
-            stream=False,
-            tools=tools,
-            tool_choice=tool_choice,
-        )
-        for chunk in response:
-            yield format_sse(chunk.model_dump())
-        yield "data: [DONE]\n\n"
+    # Extract reply text
+    reply = response.choices[0].message.content
 
-    # Save new user and assistant messages to memory
+    # Save latest messages
     if len(messages) >= 2:
-        user_data["messages"].extend(messages[-2:])
-        user_data["messages"] = user_data["messages"][-MAX_HISTORY:]
+        memory[user_id]["messages"].extend(messages[-2:])
+        memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
 
-    return StreamingResponse(stream_openai(), media_type="text/event-stream")
+    return JSONResponse({"reply": reply})
