@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse
 import openai
 import os
 import json
@@ -11,6 +12,19 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
+
+@app.post("/vapi")
+async def vapi_webhook(request: Request):
+    body = await request.json()
+    user_message = body.get("transcript", "")
+    
+    # Replace this with your real logic (LLM call, memory, etc.)
+    reply = f"Janet here! You said: {user_message}"
+
+    return JSONResponse({
+        "type": "message",
+        "message": reply
+    })
 
 @app.post("/chat/completions")
 async def chat_completions(request: Request):
