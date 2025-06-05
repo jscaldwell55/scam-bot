@@ -4,8 +4,8 @@ import openai
 import os
 import json
 from dotenv import load_dotenv
-from memory_store import memory
-from prompts import JANET_PROMPT
+from backend.memory_store import memory
+from backend.prompts import JANET_PROMPT
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
