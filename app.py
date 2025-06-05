@@ -13,26 +13,38 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 app = FastAPI()
 
 @app.post("/vapi")
-async def vapi_webhook(request: Request):
+async def vapi_response(request: Request):
     body = await request.json()
     user_id = body.get("user_id", "default_user")
     user_message = body.get("transcript", "")
 
-    # Append user message to memory
+    if not user_message:
+        return JSONResponse({
+            "type": "message",
+            "message": "I'm not sure I heard anything — can you repeat that?"
+        })
+
+    # Update memory with user input
     memory[user_id]["messages"].append({"role": "user", "content": user_message})
     memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
 
-    # Generate assistant response
+    # Construct full chat context
     full_messages = [{"role": "system", "content": JANET_PROMPT}] + memory[user_id]["messages"]
-    response = openai.chat.completions.create(
-        model="gpt-4o",
-        messages=full_messages,
-        temperature=0.9,
-    )
 
-    assistant_reply = response.choices[0].message.content
+    try:
+        # Call OpenAI
+        response = openai.chat.completions.create(
+            model="gpt-4o",
+            messages=full_messages,
+            temperature=0.9,
+        )
+        assistant_reply = response.choices[0].message.content
 
-    # Save reply to memory
+    except Exception as e:
+        print(f"Error in OpenAI call: {e}")
+        assistant_reply = "Oops — something broke on my end. Can we try that again?"
+
+    # Save assistant response to memory
     memory[user_id]["messages"].append({"role": "assistant", "content": assistant_reply})
     memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
 
