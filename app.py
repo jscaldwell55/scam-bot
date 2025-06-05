@@ -70,7 +70,7 @@ async def chat_completions(request: Request):
             model=model,
             messages=full_messages,
             temperature=temperature,
-            stream=True,
+            stream=False,
             tools=tools,
             tool_choice=tool_choice,
         )
