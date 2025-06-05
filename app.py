@@ -75,7 +75,7 @@ async def chat_completions(request: Request):
             tool_choice=tool_choice,
         )
         for chunk in response:
-            yield format_sse(chunk.dict())
+            yield format_sse(chunk.model_dump())
         yield "data: [DONE]\n\n"
 
     # Save new user and assistant messages to memory
