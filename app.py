@@ -52,25 +52,28 @@ async def chat_completions(request: Request):
     tools = body.get("tools", [])
     tool_choice = body.get("tool_choice", "auto")
 
-    # Full conversation context
+    # Pull user history
     history = memory[user_id]["messages"]
     full_messages = [{"role": "system", "content": JANET_PROMPT}] + history + messages
 
-    # Call OpenAI normally (no stream=True)
-    response = openai.chat.completions.create(
-        model=model,
-        messages=full_messages,
-        temperature=temperature,
-        tools=tools,
-        tool_choice=tool_choice,
-    )
+    try:
+        # OpenAI call
+        response = openai.chat.completions.create(
+            model=model,
+            messages=full_messages,
+            temperature=temperature,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
+        reply = response.choices[0].message.content or "Sorry, I didn’t catch that."
+    except Exception as e:
+        print(f"[OpenAI Error] {e}")
+        reply = "Hmm... Janet ran into a glitch. Try again?"
 
-    # Extract reply text
-    reply = response.choices[0].message.content
-
-    # Save latest messages
+    # Store recent messages in memory
     if len(messages) >= 2:
         memory[user_id]["messages"].extend(messages[-2:])
         memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
 
-    return JSONResponse({"reply": reply})
+    # Return message (not reply) for Vapi
+    return JSONResponse({"message": reply})
