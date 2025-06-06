@@ -68,19 +68,27 @@ if os.path.exists("static"):
 def generate_audio(text):
     """Generate audio in a separate thread to avoid blocking"""
     try:
+        print(f"Starting audio generation for text: {text[:50]}...")
         voice = Voice(
             voice_id=VOICE_CONFIG["voice_id"],
             settings=VOICE_CONFIG["settings"]
         )
+        print("Voice configured, calling ElevenLabs API...")
         audio = elevenlabs_generate(
             text=text,
             voice=voice,
             model="eleven_monolingual_v1",
             optimize_streaming_latency=4
         )
-        return base64.b64encode(audio).decode('utf-8')
+        print(f"Audio generated successfully, length: {len(audio)} bytes")
+        encoded = base64.b64encode(audio).decode('utf-8')
+        print(f"Audio encoded to base64, length: {len(encoded)}")
+        return encoded
     except Exception as e:
-        print(f"Audio generation error: {e}")
+        print(f"Audio generation error: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return None
 
 @app.get("/", response_class=HTMLResponse)
@@ -107,24 +115,28 @@ async def chat(request: Request):
         full_messages = [{"role": "system", "content": JANET_PROMPT}] + memory[user_id]["messages"]
 
         # Call OpenAI
+        print("Calling OpenAI API...")
         response = openai.chat.completions.create(
             model="gpt-4",
             messages=full_messages,
             temperature=0.9,
         )
         assistant_reply = response.choices[0].message.content
+        print(f"OpenAI response received: {assistant_reply[:50]}...")
 
         # Save assistant response to memory
         memory[user_id]["messages"].append({"role": "assistant", "content": assistant_reply})
         memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
 
         # Generate audio in a separate thread
+        print("Starting audio generation...")
         loop = asyncio.get_event_loop()
         audio_base64 = await loop.run_in_executor(
             thread_pool,
             generate_audio,
             assistant_reply
         )
+        print(f"Audio generation completed, result: {'success' if audio_base64 else 'failed'}")
 
         return JSONResponse({
             "text": assistant_reply,
@@ -132,7 +144,10 @@ async def chat(request: Request):
         })
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error in chat endpoint: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return JSONResponse({
             "error": "An error occurred while processing your request"
         })

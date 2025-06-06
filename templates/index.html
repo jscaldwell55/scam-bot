@@ -54,11 +54,23 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
+        .session-active {
+            background-color: #10B981 !important;
+        }
+        .session-inactive {
+            background-color: #6B7280 !important;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
     <div class="container mx-auto px-4 py-8">
-        <h1 class="text-3xl font-bold text-center mb-8">Janet the ScamBot</h1>
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold">Janet the ScamBot</h1>
+            <button id="session-button" 
+                    class="session-inactive text-white px-6 py-2 rounded-lg transition-colors">
+                Start Session
+            </button>
+        </div>
         
         <div class="bg-white rounded-lg shadow-lg p-4">
             <div id="chat-messages" class="chat-container overflow-y-auto mb-4">
@@ -68,13 +80,16 @@
             <div class="flex gap-2">
                 <input type="text" id="user-input" 
                        class="flex-1 p-2 border rounded-lg focus:outline-none focus:border-blue-500"
-                       placeholder="Type your message...">
+                       placeholder="Type your message..."
+                       disabled>
                 <button id="send-button" 
-                        class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                        class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                        disabled>
                     Send
                 </button>
                 <button id="mic-button" 
-                        class="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition-colors">
+                        class="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition-colors"
+                        disabled>
                     🎤
                 </button>
             </div>
@@ -91,12 +106,15 @@
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
         const micButton = document.getElementById('mic-button');
+        const sessionButton = document.getElementById('session-button');
         const errorContainer = document.getElementById('error-container');
         const loadingIndicator = document.getElementById('loading-indicator');
         let mediaRecorder;
         let audioChunks = [];
         let isRecording = false;
         let isProcessing = false;
+        let isSessionActive = false;
+        let sessionId = null;
 
         function showError(message) {
             errorContainer.textContent = message;
@@ -107,10 +125,29 @@
 
         function setProcessing(processing) {
             isProcessing = processing;
-            sendButton.disabled = processing;
-            micButton.disabled = processing;
-            userInput.disabled = processing;
+            sendButton.disabled = processing || !isSessionActive;
+            micButton.disabled = processing || !isSessionActive;
+            userInput.disabled = processing || !isSessionActive;
             loadingIndicator.classList.toggle('hidden', !processing);
+        }
+
+        function setSessionActive(active) {
+            isSessionActive = active;
+            sessionButton.textContent = active ? 'End Session' : 'Start Session';
+            sessionButton.classList.toggle('session-active', active);
+            sessionButton.classList.toggle('session-inactive', !active);
+            userInput.disabled = !active;
+            sendButton.disabled = !active;
+            micButton.disabled = !active;
+            
+            if (!active) {
+                // Clear chat when session ends
+                chatMessages.innerHTML = '';
+                sessionId = null;
+            } else {
+                // Generate new session ID when starting
+                sessionId = 'session_' + Date.now();
+            }
         }
 
         // Initialize speech recognition
@@ -146,6 +183,11 @@
         }
 
         async function sendMessage() {
+            if (!isSessionActive) {
+                showError('Please start a session first');
+                return;
+            }
+
             const message = userInput.value.trim();
             if (!message || isProcessing) return;
 
@@ -161,7 +203,7 @@
                     },
                     body: JSON.stringify({
                         message: message,
-                        user_id: 'default_user'
+                        user_id: sessionId
                     })
                 });
 
@@ -176,35 +218,50 @@
 
                 // Add assistant's text response immediately
                 addMessage(data.text, false);
-                setProcessing(false); // Allow new messages while audio loads
+                setProcessing(false);
 
                 // Play audio response if available, with timeout
                 if (data.audio) {
                     console.log('Audio data received, length:', data.audio.length);
                     try {
+                        console.log('Creating Audio object...');
                         const audio = new Audio('data:audio/mpeg;base64,' + data.audio);
                         
                         // Set a timeout for audio loading
+                        console.log('Setting up audio loading promise...');
                         const audioLoadPromise = new Promise((resolve, reject) => {
                             const timeout = setTimeout(() => {
+                                console.log('Audio loading timed out after 3 seconds');
                                 reject(new Error('Audio loading timeout'));
-                            }, 3000); // 3 second timeout
+                            }, 3000);
 
                             audio.oncanplaythrough = () => {
+                                console.log('Audio can play through');
                                 clearTimeout(timeout);
                                 resolve();
                             };
-                            audio.onerror = () => {
+                            audio.onerror = (e) => {
+                                console.error('Audio loading error:', e);
                                 clearTimeout(timeout);
                                 reject(new Error('Audio loading failed'));
                             };
+                            audio.onloadstart = () => console.log('Audio loading started');
+                            audio.onprogress = () => console.log('Audio loading progress');
+                            audio.onloadeddata = () => console.log('Audio data loaded');
                         });
 
+                        console.log('Waiting for audio to be ready...');
                         await audioLoadPromise;
+                        console.log('Playing audio...');
                         await audio.play();
+                        console.log('Audio playback started');
                     } catch (audioError) {
                         console.error('Audio playback error:', audioError);
-                        // Don't show error to user since text is already displayed
+                        console.error('Error details:', {
+                            name: audioError.name,
+                            message: audioError.message,
+                            stack: audioError.stack
+                        });
                     }
                 } else {
                     console.log('No audio data in response');
@@ -216,9 +273,14 @@
             }
         }
 
+        // Handle session button click
+        sessionButton.addEventListener('click', () => {
+            setSessionActive(!isSessionActive);
+        });
+
         // Handle microphone button click
         micButton.addEventListener('click', () => {
-            if (isProcessing) return;
+            if (isProcessing || !isSessionActive) return;
             
             if (!isRecording) {
                 try {
@@ -238,7 +300,7 @@
 
         sendButton.addEventListener('click', sendMessage);
         userInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !isProcessing) {
+            if (e.key === 'Enter' && !isProcessing && isSessionActive) {
                 sendMessage();
             }
         });
