@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from elevenlabs import Voice, VoiceSettings, generate as elevenlabs_generate, set_api_key
 from backend.memory_store import memory, MAX_HISTORY
 from backend.prompts import JANET_PROMPT
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 load_dotenv()
 
@@ -30,6 +32,9 @@ if missing_vars:
 # Initialize API keys
 openai.api_key = required_env_vars["OPENAI_API_KEY"]
 set_api_key(required_env_vars["ELEVENLABS_API_KEY"])
+
+# Create a thread pool for CPU-bound tasks
+thread_pool = ThreadPoolExecutor(max_workers=4)
 
 # ElevenLabs voice configuration
 VOICE_CONFIG = {
@@ -60,6 +65,19 @@ templates = Jinja2Templates(directory="templates")
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
+def generate_audio(text):
+    """Generate audio in a separate thread to avoid blocking"""
+    voice = Voice(
+        voice_id=VOICE_CONFIG["voice_id"],
+        settings=VOICE_CONFIG["settings"]
+    )
+    audio = elevenlabs_generate(
+        text=text,
+        voice=voice,
+        model="eleven_monolingual_v1"
+    )
+    return base64.b64encode(audio).decode('utf-8')
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -75,14 +93,14 @@ async def chat(request: Request):
             "error": "No message provided"
         })
 
-    # Update memory with user input
-    memory[user_id]["messages"].append({"role": "user", "content": user_message})
-    memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
-
-    # Construct full chat context
-    full_messages = [{"role": "system", "content": JANET_PROMPT}] + memory[user_id]["messages"]
-
     try:
+        # Update memory with user input
+        memory[user_id]["messages"].append({"role": "user", "content": user_message})
+        memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
+
+        # Construct full chat context
+        full_messages = [{"role": "system", "content": JANET_PROMPT}] + memory[user_id]["messages"]
+
         # Call OpenAI
         response = openai.chat.completions.create(
             model="gpt-4",
@@ -91,24 +109,17 @@ async def chat(request: Request):
         )
         assistant_reply = response.choices[0].message.content
 
-        # Generate audio using ElevenLabs with configured voice
-        voice = Voice(
-            voice_id=VOICE_CONFIG["voice_id"],
-            settings=VOICE_CONFIG["settings"]
-        )
-        
-        audio = elevenlabs_generate(
-            text=assistant_reply,
-            voice=voice,
-            model="eleven_monolingual_v1"
-        )
-
-        # Convert audio bytes to base64
-        audio_base64 = base64.b64encode(audio).decode('utf-8')
-
         # Save assistant response to memory
         memory[user_id]["messages"].append({"role": "assistant", "content": assistant_reply})
         memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
+
+        # Generate audio in a separate thread
+        loop = asyncio.get_event_loop()
+        audio_base64 = await loop.run_in_executor(
+            thread_pool,
+            generate_audio,
+            assistant_reply
+        )
 
         return JSONResponse({
             "text": assistant_reply,

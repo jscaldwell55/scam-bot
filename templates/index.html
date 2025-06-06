@@ -38,6 +38,22 @@
             text-align: center;
             margin-top: 0.5rem;
         }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,.1);
+            border-radius: 50%;
+            border-top-color: #3b82f6;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -63,6 +79,10 @@
                 </button>
             </div>
             <div id="error-container" class="error-message"></div>
+            <div id="loading-indicator" class="text-center mt-2 hidden">
+                <div class="loading"></div>
+                <span class="ml-2 text-gray-600">Processing...</span>
+            </div>
         </div>
     </div>
 
@@ -72,15 +92,25 @@
         const sendButton = document.getElementById('send-button');
         const micButton = document.getElementById('mic-button');
         const errorContainer = document.getElementById('error-container');
+        const loadingIndicator = document.getElementById('loading-indicator');
         let mediaRecorder;
         let audioChunks = [];
         let isRecording = false;
+        let isProcessing = false;
 
         function showError(message) {
             errorContainer.textContent = message;
             setTimeout(() => {
                 errorContainer.textContent = '';
             }, 5000);
+        }
+
+        function setProcessing(processing) {
+            isProcessing = processing;
+            sendButton.disabled = processing;
+            micButton.disabled = processing;
+            userInput.disabled = processing;
+            loadingIndicator.classList.toggle('hidden', !processing);
         }
 
         // Initialize speech recognition
@@ -99,6 +129,7 @@
         recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
             showError('Error with speech recognition. Please try again.');
+            setProcessing(false);
         };
 
         recognition.onend = () => {
@@ -116,9 +147,9 @@
 
         async function sendMessage() {
             const message = userInput.value.trim();
-            if (!message) return;
+            if (!message || isProcessing) return;
 
-            // Add user message to chat
+            setProcessing(true);
             addMessage(message, true);
             userInput.value = '';
 
@@ -162,11 +193,15 @@
             } catch (error) {
                 console.error('Error:', error);
                 showError('Sorry, something went wrong. Please try again.');
+            } finally {
+                setProcessing(false);
             }
         }
 
         // Handle microphone button click
         micButton.addEventListener('click', () => {
+            if (isProcessing) return;
+            
             if (!isRecording) {
                 try {
                     recognition.start();
@@ -185,7 +220,7 @@
 
         sendButton.addEventListener('click', sendMessage);
         userInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !isProcessing) {
                 sendMessage();
             }
         });
