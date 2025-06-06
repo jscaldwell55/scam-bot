@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import openai
 import os
 import json
+import base64
 from dotenv import load_dotenv
 from elevenlabs import Voice, VoiceSettings, generate as elevenlabs_generate, set_api_key
 from backend.memory_store import memory, MAX_HISTORY
@@ -102,13 +103,16 @@ async def chat(request: Request):
             model="eleven_monolingual_v1"
         )
 
+        # Convert audio bytes to base64
+        audio_base64 = base64.b64encode(audio).decode('utf-8')
+
         # Save assistant response to memory
         memory[user_id]["messages"].append({"role": "assistant", "content": assistant_reply})
         memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
 
         return JSONResponse({
             "text": assistant_reply,
-            "audio": audio
+            "audio": audio_base64
         })
 
     except Exception as e:
