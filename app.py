@@ -1,27 +1,48 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi import FastAPI, Request, Form
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 import openai
 import os
 import json
 from dotenv import load_dotenv
+from elevenlabs import generate, set_api_key
 from backend.memory_store import memory, MAX_HISTORY
 from backend.prompts import JANET_PROMPT
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
+set_api_key(os.getenv("ELEVENLABS_API_KEY"))
 
 app = FastAPI()
 
-@app.post("/vapi")
-async def vapi_response(request: Request):
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static files and templates
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.post("/chat")
+async def chat(request: Request):
     body = await request.json()
     user_id = body.get("user_id", "default_user")
-    user_message = body.get("transcript", "")
+    user_message = body.get("message", "")
 
     if not user_message:
         return JSONResponse({
-            "type": "message",
-            "message": "I'm not sure I heard anything — can you repeat that?"
+            "error": "No message provided"
         })
 
     # Update memory with user input
@@ -34,58 +55,30 @@ async def vapi_response(request: Request):
     try:
         # Call OpenAI
         response = openai.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4",
             messages=full_messages,
             temperature=0.9,
         )
         assistant_reply = response.choices[0].message.content
 
-    except Exception as e:
-        print(f"Error in OpenAI call: {e}")
-        assistant_reply = "Oops — something broke on my end. Can we try that again?"
-
-    # Save assistant response to memory
-    memory[user_id]["messages"].append({"role": "assistant", "content": assistant_reply})
-    memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
-
-    return JSONResponse({
-        "type": "message",
-        "message": assistant_reply
-    })
-
-
-@app.post("/chat/completions")
-async def chat_completions(request: Request):
-    body = await request.json()
-    user_id = body.get("user_id", "default_user")
-    model = body.get("model", "gpt-4o")
-    messages = body.get("messages", [])
-    temperature = body.get("temperature", 0.9)
-    tools = body.get("tools", [])
-    tool_choice = body.get("tool_choice", "auto")
-
-    # Pull user history
-    history = memory[user_id]["messages"]
-    full_messages = [{"role": "system", "content": JANET_PROMPT}] + history + messages
-
-    try:
-        # OpenAI call
-        response = openai.chat.completions.create(
-            model=model,
-            messages=full_messages,
-            temperature=temperature,
-            tools=tools,
-            tool_choice=tool_choice,
+        # Generate audio using ElevenLabs
+        audio = generate(
+            text=assistant_reply,
+            voice="Rachel",
+            model="eleven_monolingual_v1"
         )
-        reply = response.choices[0].message.content or "Sorry, I didn’t catch that."
-    except Exception as e:
-        print(f"[OpenAI Error] {e}")
-        reply = "Hmm... Janet ran into a glitch. Try again?"
 
-    # Store recent messages in memory
-    if len(messages) >= 2:
-        memory[user_id]["messages"].extend(messages[-2:])
+        # Save assistant response to memory
+        memory[user_id]["messages"].append({"role": "assistant", "content": assistant_reply})
         memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
 
-    # Return message (not reply) for Vapi
-    return JSONResponse({"message": reply})
+        return JSONResponse({
+            "text": assistant_reply,
+            "audio": audio
+        })
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return JSONResponse({
+            "error": "An error occurred while processing your request"
+        })
