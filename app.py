@@ -34,16 +34,16 @@ openai.api_key = required_env_vars["OPENAI_API_KEY"]
 set_api_key(required_env_vars["ELEVENLABS_API_KEY"])
 
 # Create a thread pool for CPU-bound tasks
-thread_pool = ThreadPoolExecutor(max_workers=4)
+thread_pool = ThreadPoolExecutor(max_workers=1)
 
 # ElevenLabs voice configuration
 VOICE_CONFIG = {
     "voice_id": "pMsXgVXv3BLzUgSXRplE",
     "settings": VoiceSettings(
-        stability=0.3,
-        similarity_boost=0.75,
-        style=0.9,
-        use_speaker_boost=True
+        stability=0.2,
+        similarity_boost=0.5,
+        style=0.5,
+        use_speaker_boost=False
     )
 }
 
@@ -67,16 +67,21 @@ if os.path.exists("static"):
 
 def generate_audio(text):
     """Generate audio in a separate thread to avoid blocking"""
-    voice = Voice(
-        voice_id=VOICE_CONFIG["voice_id"],
-        settings=VOICE_CONFIG["settings"]
-    )
-    audio = elevenlabs_generate(
-        text=text,
-        voice=voice,
-        model="eleven_monolingual_v1"
-    )
-    return base64.b64encode(audio).decode('utf-8')
+    try:
+        voice = Voice(
+            voice_id=VOICE_CONFIG["voice_id"],
+            settings=VOICE_CONFIG["settings"]
+        )
+        audio = elevenlabs_generate(
+            text=text,
+            voice=voice,
+            model="eleven_monolingual_v1",
+            optimize_streaming_latency=4
+        )
+        return base64.b64encode(audio).decode('utf-8')
+    except Exception as e:
+        print(f"Audio generation error: {e}")
+        return None
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):

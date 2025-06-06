@@ -174,18 +174,37 @@
                     return;
                 }
 
-                // Add assistant's text response
+                // Add assistant's text response immediately
                 addMessage(data.text, false);
+                setProcessing(false); // Allow new messages while audio loads
 
-                // Play audio response if available
+                // Play audio response if available, with timeout
                 if (data.audio) {
                     console.log('Audio data received, length:', data.audio.length);
                     try {
                         const audio = new Audio('data:audio/mpeg;base64,' + data.audio);
+                        
+                        // Set a timeout for audio loading
+                        const audioLoadPromise = new Promise((resolve, reject) => {
+                            const timeout = setTimeout(() => {
+                                reject(new Error('Audio loading timeout'));
+                            }, 3000); // 3 second timeout
+
+                            audio.oncanplaythrough = () => {
+                                clearTimeout(timeout);
+                                resolve();
+                            };
+                            audio.onerror = () => {
+                                clearTimeout(timeout);
+                                reject(new Error('Audio loading failed'));
+                            };
+                        });
+
+                        await audioLoadPromise;
                         await audio.play();
                     } catch (audioError) {
                         console.error('Audio playback error:', audioError);
-                        showError('Error playing audio response');
+                        // Don't show error to user since text is already displayed
                     }
                 } else {
                     console.log('No audio data in response');
@@ -193,7 +212,6 @@
             } catch (error) {
                 console.error('Error:', error);
                 showError('Sorry, something went wrong. Please try again.');
-            } finally {
                 setProcessing(false);
             }
         }
