@@ -12,8 +12,23 @@ from backend.memory_store import memory, MAX_HISTORY
 from backend.prompts import JANET_PROMPT
 
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-set_api_key(os.getenv("ELEVENLABS_API_KEY"))
+
+# Check for required environment variables
+required_env_vars = {
+    "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
+    "ELEVENLABS_API_KEY": os.getenv("ELEVENLABS_API_KEY")
+}
+
+missing_vars = [var for var, value in required_env_vars.items() if not value]
+if missing_vars:
+    raise EnvironmentError(
+        f"Missing required environment variables: {', '.join(missing_vars)}. "
+        "Please set these in your Render environment variables."
+    )
+
+# Initialize API keys
+openai.api_key = required_env_vars["OPENAI_API_KEY"]
+set_api_key(required_env_vars["ELEVENLABS_API_KEY"])
 
 # ElevenLabs voice configuration
 VOICE_CONFIG = {
