@@ -96,32 +96,54 @@ async def home(request: Request):
 
 @app.post("/chat")
 async def chat(request: Request):
-    body = await request.json()
-    user_id = body.get("user_id", "default_user")
-    user_message = body.get("message", "")
-
-    if not user_message:
-        return JSONResponse({
-            "error": "No message provided"
-        })
-
     try:
+        body = await request.json()
+        user_id = body.get("user_id", "default_user")
+        user_message = body.get("message", "")
+
+        print(f"Received chat request - User ID: {user_id}, Message: {user_message[:50]}...")
+
+        if not user_message:
+            print("Error: No message provided")
+            return JSONResponse({
+                "error": "No message provided"
+            })
+
+        if not user_id:
+            print("Error: No user_id provided")
+            return JSONResponse({
+                "error": "No user_id provided"
+            })
+
+        # Initialize memory for new user if needed
+        if user_id not in memory:
+            print(f"Initializing memory for new user: {user_id}")
+            memory[user_id] = {"messages": []}
+
         # Update memory with user input
         memory[user_id]["messages"].append({"role": "user", "content": user_message})
         memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
+        print(f"Current message count for user {user_id}: {len(memory[user_id]['messages'])}")
 
         # Construct full chat context
         full_messages = [{"role": "system", "content": JANET_PROMPT}] + memory[user_id]["messages"]
+        print(f"Total messages in context: {len(full_messages)}")
 
         # Call OpenAI
         print("Calling OpenAI API...")
-        response = openai.chat.completions.create(
-            model="gpt-4",
-            messages=full_messages,
-            temperature=0.9,
-        )
-        assistant_reply = response.choices[0].message.content
-        print(f"OpenAI response received: {assistant_reply[:50]}...")
+        try:
+            response = openai.chat.completions.create(
+                model="gpt-4",
+                messages=full_messages,
+                temperature=0.9,
+            )
+            assistant_reply = response.choices[0].message.content
+            print(f"OpenAI response received: {assistant_reply[:50]}...")
+        except Exception as e:
+            print(f"OpenAI API error: {str(e)}")
+            return JSONResponse({
+                "error": "Error getting response from OpenAI"
+            })
 
         # Save assistant response to memory
         memory[user_id]["messages"].append({"role": "assistant", "content": assistant_reply})
@@ -129,18 +151,24 @@ async def chat(request: Request):
 
         # Generate audio in a separate thread
         print("Starting audio generation...")
-        loop = asyncio.get_event_loop()
-        audio_base64 = await loop.run_in_executor(
-            thread_pool,
-            generate_audio,
-            assistant_reply
-        )
-        print(f"Audio generation completed, result: {'success' if audio_base64 else 'failed'}")
+        try:
+            loop = asyncio.get_event_loop()
+            audio_base64 = await loop.run_in_executor(
+                thread_pool,
+                generate_audio,
+                assistant_reply
+            )
+            print(f"Audio generation completed, result: {'success' if audio_base64 else 'failed'}")
+        except Exception as e:
+            print(f"Audio generation error in chat endpoint: {str(e)}")
+            audio_base64 = None
 
-        return JSONResponse({
+        response_data = {
             "text": assistant_reply,
             "audio": audio_base64
-        })
+        }
+        print("Sending response to client")
+        return JSONResponse(response_data)
 
     except Exception as e:
         print(f"Error in chat endpoint: {str(e)}")

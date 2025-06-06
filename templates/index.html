@@ -196,6 +196,7 @@
             userInput.value = '';
 
             try {
+                console.log('Sending message to server...');
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: {
@@ -207,8 +208,12 @@
                     })
                 });
 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
-                console.log('API Response:', data);
+                console.log('API Response received:', data);
                 
                 if (data.error) {
                     console.error('API Error:', data.error);
@@ -275,6 +280,10 @@
 
         // Handle session button click
         sessionButton.addEventListener('click', () => {
+            if (isProcessing) {
+                showError('Please wait for the current message to finish processing');
+                return;
+            }
             setSessionActive(!isSessionActive);
         });
 
