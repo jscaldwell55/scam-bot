@@ -23,6 +23,14 @@
             background-color: #f5f5f5;
             margin-right: auto;
         }
+        .recording {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -42,6 +50,10 @@
                         class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">
                     Send
                 </button>
+                <button id="mic-button" 
+                        class="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition-colors">
+                    🎤
+                </button>
             </div>
         </div>
     </div>
@@ -50,6 +62,33 @@
         const chatMessages = document.getElementById('chat-messages');
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
+        const micButton = document.getElementById('mic-button');
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+
+        // Initialize speech recognition
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            userInput.value = transcript;
+            sendMessage();
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            addMessage('Error with speech recognition. Please try again.', false);
+        };
+
+        recognition.onend = () => {
+            micButton.classList.remove('recording');
+            isRecording = false;
+        };
 
         function addMessage(content, isUser) {
             const messageDiv = document.createElement('div');
@@ -92,13 +131,31 @@
                 // Play audio response
                 if (data.audio) {
                     const audio = new Audio('data:audio/mpeg;base64,' + data.audio);
-                    audio.play();
+                    await audio.play();
                 }
             } catch (error) {
                 console.error('Error:', error);
                 addMessage('Sorry, something went wrong. Please try again.', false);
             }
         }
+
+        // Handle microphone button click
+        micButton.addEventListener('click', () => {
+            if (!isRecording) {
+                try {
+                    recognition.start();
+                    micButton.classList.add('recording');
+                    isRecording = true;
+                } catch (error) {
+                    console.error('Error starting speech recognition:', error);
+                    addMessage('Error starting speech recognition. Please try again.', false);
+                }
+            } else {
+                recognition.stop();
+                micButton.classList.remove('recording');
+                isRecording = false;
+            }
+        });
 
         sendButton.addEventListener('click', sendMessage);
         userInput.addEventListener('keypress', (e) => {
