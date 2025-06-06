@@ -2,6 +2,6 @@ fastapi
 uvicorn
 openai
 python-dotenv
-elevenlabs
+elevenlabs==0.2.24
 python-multipart
 jinja2

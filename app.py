@@ -7,13 +7,13 @@ import openai
 import os
 import json
 from dotenv import load_dotenv
-from elevenlabs import Voice, VoiceSettings, generate as elevenlabs_generate
+from elevenlabs import Voice, VoiceSettings, generate as elevenlabs_generate, set_api_key
 from backend.memory_store import memory, MAX_HISTORY
 from backend.prompts import JANET_PROMPT
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
-os.environ["ELEVENLABS_API_KEY"] = os.getenv("ELEVENLABS_API_KEY")
+set_api_key(os.getenv("ELEVENLABS_API_KEY"))
 
 # ElevenLabs voice configuration
 VOICE_CONFIG = {
