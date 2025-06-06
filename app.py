@@ -40,9 +40,9 @@ thread_pool = ThreadPoolExecutor(max_workers=1)
 VOICE_CONFIG = {
     "voice_id": "pMsXgVXv3BLzUgSXRplE",
     "settings": VoiceSettings(
-        stability=0.2,
-        similarity_boost=0.5,
-        style=0.5,
+        stability=0.1,
+        similarity_boost=0.3,
+        style=0.3,
         use_speaker_boost=False
     )
 }
@@ -77,8 +77,7 @@ def generate_audio(text):
         audio = elevenlabs_generate(
             text=text,
             voice=voice,
-            model="eleven_monolingual_v1",
-            optimize_streaming_latency=4
+            model="eleven_monolingual_v1"
         )
         print(f"Audio generated successfully, length: {len(audio)} bytes")
         encoded = base64.b64encode(audio).decode('utf-8')
