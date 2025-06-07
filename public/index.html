@@ -16,8 +16,13 @@
       background-color: #f5f5f5;
     }
     h1 {
-      margin-bottom: 40px;
+      margin-bottom: 20px;
       color: #333;
+    }
+    #status {
+      margin-bottom: 20px;
+      font-size: 18px;
+      color: #666;
     }
     button {
       margin: 10px;
@@ -33,77 +38,101 @@
     button:hover {
       background-color: #0041c4;
     }
+    button:disabled {
+      background-color: #aaa;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
   <h1>Janet Scambot</h1>
+  <div id="status">Awaiting interaction...</div>
   <button id="start-btn">Start Call</button>
-  <button id="stop-btn">End Call</button>
+  <button id="stop-btn" disabled>End Call</button>
 
-  <!-- Load Vapi SDK as per their documentation -->
-  <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web-sdk"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web-sdk@0.1.60/dist/index.umd.js"></script>
 
   <script>
+    // Prompt user for microphone access on page load
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(() => console.log("Microphone permission granted."))
+      .catch(err => console.warn("Microphone permission denied:", err));
+
     console.log("Attempting to initialize Vapi SDK...");
 
-    // This code will run after the above script has been loaded and parsed (or failed)
     try {
-      if (typeof Vapi === 'undefined') {
-        console.error("Vapi class is undefined. The SDK script likely failed to load or execute correctly. Check the Network tab for errors with the SDK script URL.");
-        // You could add a more robust check or wait mechanism here if needed,
-        // but with CORB, the script execution is likely blocked entirely.
+      if (typeof Vapi === 'undefined' || typeof Vapi.default === 'undefined') {
+        console.error("Vapi class is undefined. Check SDK script loading.");
       } else {
-        console.log("Vapi class found. Initializing...");
-        const vapi = new Vapi({
-          apiKey: "1c13d18f-bdb2-4195-9b54-5bd3d7f2be21" // Your Public API Key
+        const vapi = new Vapi.default({
+          apiKey: "1c13d18f-bdb2-4195-9b54-5bd3d7f2be21"
         });
-        console.log("Vapi SDK initialized.");
-
-        // Optional: Add event listeners to see Vapi's internal state
-        vapi.on('call-start', () => console.log('Vapi Event: call-start'));
-        vapi.on('call-end', () => console.log('Vapi Event: call-end'));
-        vapi.on('speech-start', () => console.log('Vapi Event: speech-start'));
-        vapi.on('speech-end', () => console.log('Vapi Event: speech-end'));
-        vapi.on('error', (e) => console.error('Vapi Event: error', e));
-        // vapi.on('message', (message) => console.log('Vapi Event: Message:', message)); // Can be verbose
 
         const startBtn = document.getElementById("start-btn");
         const stopBtn = document.getElementById("stop-btn");
+        const statusEl = document.getElementById("status");
+
+        const setStatus = (text) => {
+          if (statusEl) statusEl.textContent = text;
+        };
+
+        vapi.on('call-start', () => {
+          setStatus("🎤 Listening...");
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+        });
+
+        vapi.on('speech-start', () => {
+          setStatus("🗣️ Speaking...");
+        });
+
+        vapi.on('speech-end', () => {
+          setStatus("🎤 Listening...");
+        });
+
+        vapi.on('call-end', () => {
+          setStatus("✅ Conversation ended.");
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        });
+
+        vapi.on('error', (e) => {
+          console.error('Vapi error:', e);
+          setStatus("⚠️ Error occurred.");
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        });
 
         if (startBtn) {
           startBtn.addEventListener("click", () => {
-            console.log("Start Call button clicked.");
+            setStatus("⏳ Starting call...");
             try {
               vapi.start({
                 assistant: {
-                  id: "a0f2248e-143f-43a0-8130-7f386a16a94a" // Your Assistant ID
+                  id: "a0f2248e-143f-43a0-8130-7f386a16a94a"
                 }
               });
-              console.log("vapi.start() called.");
             } catch (error) {
               console.error("Error calling vapi.start():", error);
+              setStatus("❌ Failed to start call.");
             }
           });
-        } else {
-          console.error("Start button not found!");
         }
 
         if (stopBtn) {
           stopBtn.addEventListener("click", () => {
-            console.log("End Call button clicked.");
             try {
               vapi.stop();
-              console.log("vapi.stop() called.");
+              setStatus("🛑 Ending call...");
             } catch (error) {
               console.error("Error calling vapi.stop():", error);
+              setStatus("❌ Failed to stop call.");
             }
           });
-        } else {
-          console.error("Stop button not found!");
         }
       }
     } catch (error) {
-      console.error("Error in Vapi initialization block:", error);
+      console.error("Vapi init error:", error);
     }
   </script>
 </body>
