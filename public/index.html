@@ -40,12 +40,11 @@
   <button id="start-btn">Start Call</button>
   <button id="stop-btn">End Call</button>
 
-  <!-- Load Vapi SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web-sdk@latest"></script>
-
-  <!-- Initialize Vapi after SDK is loaded -->
   <script>
-    window.addEventListener('DOMContentLoaded', () => {
+    // Dynamically load the Vapi SDK
+    const script = document.createElement('script');
+    script.src = "https://cdn.jsdelivr.net/npm/@vapi-ai/web-sdk@latest";
+    script.onload = () => {
       const vapi = new Vapi({
         apiKey: "1c13d18f-bdb2-4195-9b54-5bd3d7f2be21"
       });
@@ -61,7 +60,8 @@
       document.getElementById("stop-btn").addEventListener("click", () => {
         vapi.stop();
       });
-    });
+    };
+    document.head.appendChild(script);
   </script>
 </body>
 </html>
