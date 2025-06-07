@@ -70,13 +70,26 @@ if os.path.exists("static"):
 active_sessions = set()
 SESSION_TIMEOUT = 3600  # 1 hour timeout
 
+# Periodically clean up old sessions
 def cleanup_old_sessions():
     """Remove sessions older than SESSION_TIMEOUT"""
     current_time = time.time()
     for session_id in list(active_sessions):
         if session_id in memory and current_time - memory[session_id].get('last_activity', 0) > SESSION_TIMEOUT:
+            print(f"Cleaning up old session: {session_id}")
             del memory[session_id]
-            active_sessions.remove(session_id)
+            active_sessions.discard(session_id)
+
+# Schedule session cleanup to run every 5 minutes
+async def schedule_session_cleanup():
+    while True:
+        cleanup_old_sessions()
+        await asyncio.sleep(300)  # 5 minutes
+
+# Start session cleanup when app starts
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(schedule_session_cleanup())
 
 def generate_audio(text):
     """Generate audio in a separate thread to avoid blocking"""
@@ -176,20 +189,34 @@ async def chat(request: Request):
         memory[user_id]["messages"].append({"role": "assistant", "content": assistant_reply})
         memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
 
-        # Generate audio in a separate thread with timeout
+        # Generate audio with retry mechanism
         print("Starting audio generation...")
-        try:
-            audio_base64 = await asyncio.wait_for(
-                asyncio.to_thread(generate_audio, assistant_reply),
-                timeout=15.0  # 15 second timeout
-            )
-            print(f"Audio generation completed, result: {'success' if audio_base64 else 'failed'}")
-        except asyncio.TimeoutError:
-            print("Audio generation timed out")
-            audio_base64 = None
-        except Exception as e:
-            print(f"Audio generation error in chat endpoint: {str(e)}")
-            audio_base64 = None
+        audio_base64 = None
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                audio_base64 = await asyncio.wait_for(
+                    asyncio.to_thread(generate_audio, assistant_reply),
+                    timeout=15.0  # 15 second timeout
+                )
+                if audio_base64:
+                    print(f"Audio generation completed successfully on attempt {attempt + 1}")
+                    break
+            except asyncio.TimeoutError:
+                print(f"Audio generation attempt {attempt + 1} timed out")
+                if attempt < max_retries - 1:
+                    print(f"Retrying audio generation in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+            except Exception as e:
+                print(f"Audio generation error in attempt {attempt + 1}: {str(e)}")
+                if attempt < max_retries - 1:
+                    print(f"Retrying audio generation in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+
+        if not audio_base64:
+            print("All audio generation attempts failed")
 
         response_data = {
             "text": assistant_reply,
@@ -213,11 +240,22 @@ async def end_session(request: Request):
         body = await request.json()
         user_id = body.get("user_id")
         
-        if user_id and user_id in memory:
+        if not user_id:
+            return JSONResponse({"error": "No user_id provided"}, status_code=400)
+            
+        if user_id in memory:
+            # Clean up session data
             del memory[user_id]
             active_sessions.discard(user_id)
+            print(f"Session {user_id} ended successfully")
             return JSONResponse({"status": "success"})
-        return JSONResponse({"status": "session not found"})
+            
+        print(f"Attempted to end non-existent session: {user_id}")
+        return JSONResponse({"status": "session not found"}, status_code=404)
+        
     except Exception as e:
         print(f"Error ending session: {str(e)}")
-        return JSONResponse({"error": "Failed to end session"})
+        return JSONResponse({
+            "error": "Failed to end session",
+            "details": str(e)
+        }, status_code=500)

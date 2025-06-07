@@ -65,9 +65,17 @@
     </main>
 
     <script>
-        // IMPORTANT: REPLACE WITH YOUR ACTUAL DEPLOYED BACKEND URL
-        const BACKEND_BASE_URL = window.location.origin; // Use the current origin as the backend URL
-        console.log('Using backend URL:', BACKEND_BASE_URL);
+        // Backend URL configuration
+const BACKEND_BASE_URL = (() => {
+    // First try to get from environment variable
+    const envBackendUrl = window.location.origin;
+    console.log('Environment backend URL:', envBackendUrl);
+    
+    // If not available, use the current origin
+    return envBackendUrl || window.location.origin;
+})();
+
+console.log('Using backend URL:', BACKEND_BASE_URL);
 
         const chatMessagesContainer = document.getElementById('chat-messages');
         // const userInput = document.getElementById('user-input'); // REMOVED
@@ -315,13 +323,17 @@
         });
 
         // Initialize session as inactive
-        if (!BACKEND_BASE_URL || BACKEND_BASE_URL === "https://scam-bot-fwga.onrender.com") {
+        if (!BACKEND_BASE_URL) {
             showError("APP NOT CONFIGURED: Backend URL missing. Contact admin.");
             console.error("CRITICAL: BACKEND_BASE_URL not set!");
             sessionButton.disabled = true;
             micButton.disabled = true;
+        } else if (BACKEND_BASE_URL === "https://scam-bot-fwga.onrender.com") {
+            showError("WARNING: Using default backend URL. Ensure this is correct for your deployment.");
+            console.warn("Using default backend URL: https://scam-bot-fwga.onrender.com");
+            sessionButton.disabled = false;
+            console.log('Session button enabled, backend URL:', BACKEND_BASE_URL);
         } else {
-            // Enable the session button if backend URL is configured
             sessionButton.disabled = false;
             console.log('Session button enabled, backend URL:', BACKEND_BASE_URL);
         }
