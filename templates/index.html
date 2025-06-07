@@ -78,11 +78,11 @@
         const errorContainer = document.getElementById('error-container');
         const loadingIndicator = document.getElementById('loading-indicator');
         
+        // Session state
         let isRecording = false;
         let isProcessing = false;
         let isSessionActive = false;
         let sessionId = null;
-        let userTranscriptForDisplay = ""; // To hold transcript for adding to chat
         let messageCount = 0;
         let audioQueue = [];
         let isPlayingAudio = false;
@@ -100,34 +100,199 @@
 
         function setProcessing(processing) {
             isProcessing = processing;
-            const disableMic = processing || !isSessionActive || isRecording; // Mic also disabled if already recording
+            const disableMic = processing || !isSessionActive || isRecording;
             micButton.disabled = disableMic;
             loadingIndicator.classList.toggle('hidden', !processing);
             if (processing) clearError();
         }
 
-        function setSessionActiveState(active) {
-            isSessionActive = active;
-            sessionButton.textContent = active ? 'End Session' : 'Start Session';
-            sessionButton.classList.toggle('session-active', active);
-            sessionButton.classList.toggle('session-inactive', !active);
-            
-            micButton.disabled = !active || isProcessing || isRecording;
-            
-            if (!active) {
-                chatMessagesContainer.innerHTML = ''; sessionId = null;
-                addMessage("Session ended. Click 'Start Session' to chat with Janet again.", 'system');
-                if (isRecording) { // Stop recording if session ends
-                    recognition.stop();
-                    micButton.classList.remove('recording');
-                    isRecording = false;
-                }
-            } else {
-                sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+        // Session management
+        async function startSession() {
+            try {
+                console.log('Starting new session...');
+                sessionId = 'session_' + Date.now();
+                isSessionActive = true;
+                messageCount = 0;
+                sessionButton.textContent = 'End Session';
+                sessionButton.classList.remove('bg-green-600', 'hover:bg-green-700');
+                sessionButton.classList.add('bg-red-600', 'hover:bg-red-700');
+                micButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                micButton.disabled = false;
                 chatMessagesContainer.innerHTML = '';
                 addMessage("Hi there! It's Janet... remember me? It's been so long! How ARE you?", 'assistant');
+                console.log('Session started with ID:', sessionId);
+            } catch (error) {
+                console.error('Error starting session:', error);
+                showError('Failed to start session');
             }
-            clearError();
+        }
+
+        async function endSession() {
+            try {
+                console.log('Ending session:', sessionId);
+                if (sessionId) {
+                    const response = await fetch('/end_session', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ user_id: sessionId })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to end session');
+                    }
+                }
+                
+                isSessionActive = false;
+                sessionId = null;
+                messageCount = 0;
+                sessionButton.textContent = 'Start Session';
+                sessionButton.classList.remove('bg-red-600', 'hover:bg-red-700');
+                sessionButton.classList.add('bg-green-600', 'hover:bg-green-700');
+                micButton.classList.add('opacity-50', 'cursor-not-allowed');
+                micButton.disabled = true;
+                chatMessagesContainer.innerHTML = '';
+                addMessage("Session ended. Click 'Start Session' to chat with Janet again.", 'system');
+                console.log('Session ended');
+            } catch (error) {
+                console.error('Error ending session:', error);
+                showError('Failed to end session');
+            }
+        }
+
+        // Audio queue management
+        function playNextInQueue() {
+            if (audioQueue.length > 0 && !isPlayingAudio) {
+                const audio = audioQueue.shift();
+                isPlayingAudio = true;
+                audio.play();
+                audio.onended = () => {
+                    isPlayingAudio = false;
+                    playNextInQueue();
+                };
+            }
+        }
+
+        // Message handling
+        function addMessage(content, type = 'user') {
+            const div = document.createElement('div');
+            div.className = `message ${type}-message`;
+            div.textContent = content;
+            chatMessagesContainer.appendChild(div);
+            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+        }
+
+        // Send message with timeout and retry
+        async function sendMessage(text) {
+            if (!isSessionActive) {
+                showError('Please start a session first');
+                return;
+            }
+
+            if (isProcessing) {
+                showError('Please wait for the current message to finish processing');
+                return;
+            }
+
+            console.log('Sending message:', text);
+            console.log('Current session state:', {
+                isSessionActive,
+                sessionId,
+                messageCount,
+                isProcessing
+            });
+
+            setProcessing(true);
+            addMessage(text, 'user');
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: text,
+                        user_id: sessionId
+                    }),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Received response:', data);
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                addMessage(data.text, 'assistant');
+                messageCount++;
+
+                if (data.audio) {
+                    const audio = new Audio('data:audio/mp3;base64,' + data.audio);
+                    audioQueue.push(audio);
+                    if (!isPlayingAudio) {
+                        playNextInQueue();
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error sending message:', error);
+                if (error.name === 'AbortError') {
+                    showError('Request timed out. Please try again.');
+                } else {
+                    showError(error.message || 'Failed to send message');
+                }
+            } finally {
+                setProcessing(false);
+                console.log('Message processing completed');
+                console.log('Updated session state:', {
+                    isSessionActive,
+                    sessionId,
+                    messageCount,
+                    isProcessing
+                });
+            }
+        }
+
+        // Event Listeners
+        sessionButton.addEventListener('click', () => {
+            console.log('Session button clicked');
+            console.log('Current session state:', {
+                isSessionActive,
+                sessionId,
+                messageCount,
+                isProcessing
+            });
+            
+            if (isProcessing && isSessionActive) {
+                showError('Please wait for Janet to finish!');
+                return;
+            }
+            
+            if (isSessionActive) {
+                endSession();
+            } else {
+                startSession();
+            }
+        });
+
+        // Initialize session as inactive
+        if (!BACKEND_BASE_URL || BACKEND_BASE_URL === "https://scam-bot-fwga.onrender.com") {
+            showError("APP NOT CONFIGURED: Backend URL missing. Contact admin.");
+            console.error("CRITICAL: BACKEND_BASE_URL not set!");
+            sessionButton.disabled = true;
+            micButton.disabled = true;
         }
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -186,335 +351,9 @@
             showError("Voice input is not supported by your browser.");
         }
 
-        function addMessage(content, type = 'user') {
-            const div = document.createElement('div');
-            div.className = `message ${type}-message`; div.textContent = content;
-            chatMessagesContainer.appendChild(div);
-            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
-        }
-
-        async function sendMessage(messageText) { // Now takes messageText as an argument
-            if (!isSessionActive) { showError('Please start a session first.'); return; }
-            // messageText comes directly from speech recognition result now
-            if (!messageText) { console.log('UI: sendMessage called with no messageText.'); return; }
-            if (isProcessing) { console.log('UI: Message send blocked: already processing.'); return; }
-            if (!BACKEND_BASE_URL || BACKEND_BASE_URL === "https://scam-bot-fwga.onrender.com") {
-                showError("Backend URL not configured. Contact admin."); console.error("CRITICAL: BACKEND_BASE_URL not set!"); return;
-            }
-
-            console.log('UI: Preparing to send voice transcript:', messageText.substring(0, 50) + '...');
-            setProcessing(true); // This will disable the mic button
-            addMessage(messageText, 'user'); // Display the user's transcribed speech
-            
-            const currentSid = sessionId;
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
-
-            try {
-                const res = await fetch(`${BACKEND_BASE_URL}/chat`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: messageText, user_id: currentSid }), signal: controller.signal
-                });
-                clearTimeout(timeout);
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || data.detail || `Server error: ${res.status}`);
-                
-                if (data.error) showError(data.error);
-                else if (data.text) addMessage(data.text, 'assistant');
-                else addMessage("Janet seems to be at a loss for words...", 'assistant');
-                
-                if (data.warning) console.warn("Server warning:", data.warning);
-                
-                if (data.audio) {
-                    try {
-                        const audio = new Audio('data:audio/mpeg;base64,' + data.audio);
-                        const loadPromise = new Promise((resolve, reject) => {
-                            const audioTimeout = setTimeout(() => reject(new Error('Audio loading timeout')), 7000);
-                            audio.oncanplaythrough = () => { clearTimeout(audioTimeout); resolve(); };
-                            audio.onerror = () => { clearTimeout(audioTimeout); reject(new Error('Audio loading failed')); };
-                            audio.load();
-                        });
-                        await loadPromise; await audio.play();
-                    } catch (audioError) { showError("Could not play Janet's voice reply."); console.error("Audio playback error:", audioError); }
-                }
-            } catch (error) {
-                if (error.name === 'AbortError') showError('Request timed out. Janet might be busy.');
-                else if (error.message.includes("Failed to fetch")) showError('Cannot reach Janet. Check internet or contact admin.');
-                else showError(`Sorry, something went wrong: ${error.message}`);
-                console.error("sendMessage error:", error);
-            } finally {
-                setProcessing(false); // This will re-enable the mic button if session is active
-                // No need to focus on userInput as it's removed
-            }
-        }
-
-        sessionButton.addEventListener('click', () => {
-            if (isProcessing && isSessionActive) { showError('Please wait for Janet to finish!'); return; }
-            setSessionActiveState(!isSessionActive);
-        });
-
-        micButton.addEventListener('click', () => {
-            if (!SpeechRecognition) { showError("Voice input not supported."); return; }
-            if (isProcessing || !isSessionActive || isRecording) return; // Don't start if already processing, no session, or already recording
-
-            try {
-                clearError();
-                userTranscriptForDisplay = ""; // Clear any old transcript
-                recognition.start(); // onstart will handle UI changes
-            } catch (e) {
-                console.error("Error starting recognition from micButton click:", e);
-                if (e.name === 'InvalidStateError') { // Already started or starting
-                    console.warn("Recognition already in an active state.");
-                } else if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
-                    showError('Mic access denied. Check browser permissions.');
-                } else {
-                    showError('Could not start voice input. Try again or check mic.');
-                }
-                // Ensure UI consistency if start fails
-                micButton.classList.remove('recording');
-                isRecording = false;
-                micButton.disabled = !isSessionActive || isProcessing;
-            }
-        });
-
         // Text input related event listeners REMOVED
         // sendButton.addEventListener('click', sendMessage);
         // userInput.addEventListener('keypress', ...); 
-
-        setSessionActiveState(false); // Initialize session as inactive
-        if (!BACKEND_BASE_URL || BACKEND_BASE_URL === "E") {
-            showError("APP NOT CONFIGURED: Backend URL missing. Contact admin.");
-            console.error("CRITICAL: BACKEND_BASE_URL not set!");
-            sessionButton.disabled = true; micButton.disabled = true;
-        }
-
-        // Session state
-        let isSessionActive = false;
-        let sessionId = null;
-        let messageCount = 0;
-        let isProcessing = false;
-        let audioQueue = [];
-        let isPlayingAudio = false;
-
-        // Session management
-        async function startSession() {
-            try {
-                console.log('Starting new session...');
-                sessionId = 'session_' + Date.now();
-                isSessionActive = true;
-                messageCount = 0;
-                document.getElementById('session-button').textContent = 'End Session';
-                document.getElementById('session-button').classList.remove('bg-green-600', 'hover:bg-green-700');
-                document.getElementById('session-button').classList.add('bg-red-600', 'hover:bg-red-700');
-                document.getElementById('mic-button').classList.remove('opacity-50', 'cursor-not-allowed');
-                document.getElementById('mic-button').disabled = false;
-                console.log('Session started with ID:', sessionId);
-            } catch (error) {
-                console.error('Error starting session:', error);
-                showError('Failed to start session');
-            }
-        }
-
-        async function endSession() {
-            try {
-                console.log('Ending session:', sessionId);
-                if (sessionId) {
-                    const response = await fetch('/end_session', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ user_id: sessionId })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error('Failed to end session');
-                    }
-                }
-                
-                isSessionActive = false;
-                sessionId = null;
-                messageCount = 0;
-                document.getElementById('session-button').textContent = 'Start Session';
-                document.getElementById('session-button').classList.remove('bg-red-600', 'hover:bg-red-700');
-                document.getElementById('session-button').classList.add('bg-green-600', 'hover:bg-green-700');
-                document.getElementById('mic-button').classList.add('opacity-50', 'cursor-not-allowed');
-                document.getElementById('mic-button').disabled = true;
-                document.getElementById('chat-messages').innerHTML = '';
-                console.log('Session ended');
-            } catch (error) {
-                console.error('Error ending session:', error);
-                showError('Failed to end session');
-            }
-        }
-
-        // Audio queue management
-        function playNextInQueue() {
-            if (audioQueue.length > 0 && !isPlayingAudio) {
-                const audio = audioQueue.shift();
-                isPlayingAudio = true;
-                audio.play();
-                audio.onended = () => {
-                    isPlayingAudio = false;
-                    playNextInQueue();
-                };
-            }
-        }
-
-        // Message handling
-        function addMessage(content, isUser = false) {
-            const messagesDiv = document.getElementById('chat-messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `p-4 rounded-lg mb-4 max-w-[80%] ${isUser ? 'bg-blue-100 ml-auto' : 'bg-gray-100'}`;
-            messageDiv.textContent = content;
-            messagesDiv.appendChild(messageDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-
-        // Send message with timeout and retry
-        async function sendMessage(text) {
-            if (!isSessionActive) {
-                showError('Please start a session first');
-                return;
-            }
-
-            if (isProcessing) {
-                showError('Please wait for the current message to finish processing');
-                return;
-            }
-
-            console.log('Sending message:', text);
-            console.log('Current session state:', {
-                isSessionActive,
-                sessionId,
-                messageCount,
-                isProcessing
-            });
-
-            setProcessing(true);
-            addMessage(text, true);
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-
-            try {
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        message: text,
-                        user_id: sessionId
-                    }),
-                    signal: controller.signal
-                });
-
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                console.log('Received response:', data);
-
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-
-                addMessage(data.text);
-                messageCount++;
-
-                if (data.audio) {
-                    const audio = new Audio('data:audio/mp3;base64,' + data.audio);
-                    audioQueue.push(audio);
-                    if (!isPlayingAudio) {
-                        playNextInQueue();
-                    }
-                }
-
-            } catch (error) {
-                console.error('Error sending message:', error);
-                if (error.name === 'AbortError') {
-                    showError('Request timed out. Please try again.');
-                } else {
-                    showError(error.message || 'Failed to send message');
-                }
-            } finally {
-                setProcessing(false);
-                console.log('Message processing completed');
-                console.log('Updated session state:', {
-                    isSessionActive,
-                    sessionId,
-                    messageCount,
-                    isProcessing
-                });
-            }
-        }
-
-        // Event Listeners
-        document.getElementById('session-button').addEventListener('click', () => {
-            console.log('Session button clicked');
-            console.log('Current session state:', {
-                isSessionActive,
-                sessionId,
-                messageCount,
-                isProcessing
-            });
-            
-            if (isSessionActive) {
-                endSession();
-            } else {
-                startSession();
-            }
-        });
-
-        document.getElementById('mic-button').addEventListener('click', async () => {
-            if (!isSessionActive) {
-                showError('Please start a session first');
-                return;
-            }
-
-            if (isProcessing) {
-                showError('Please wait for the current message to finish processing');
-                return;
-            }
-
-            try {
-                const recognition = new webkitSpeechRecognition();
-                recognition.continuous = false;
-                recognition.interimResults = false;
-                recognition.lang = 'en-US';
-
-                recognition.onstart = () => {
-                    console.log('Voice recognition started');
-                    document.getElementById('mic-button').classList.add('bg-red-600');
-                };
-
-                recognition.onresult = (event) => {
-                    const text = event.results[0][0].transcript;
-                    console.log('Voice recognition result:', text);
-                    sendMessage(text);
-                };
-
-                recognition.onerror = (event) => {
-                    console.error('Voice recognition error:', event.error);
-                    showError('Voice recognition failed. Please try again.');
-                    document.getElementById('mic-button').classList.remove('bg-red-600');
-                };
-
-                recognition.onend = () => {
-                    console.log('Voice recognition ended');
-                    document.getElementById('mic-button').classList.remove('bg-red-600');
-                };
-
-                recognition.start();
-            } catch (error) {
-                console.error('Error starting voice recognition:', error);
-                showError('Voice recognition is not supported in your browser');
-            }
-        });
     </script>
 </body>
 </html>
