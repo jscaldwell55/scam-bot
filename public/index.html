@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Janet Scambot</title>
-  <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web-sdk@latest"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -38,25 +37,31 @@
 </head>
 <body>
   <h1>Janet Scambot</h1>
-  <button onclick="startAssistant()">Start Call</button>
-  <button onclick="stopAssistant()">End Call</button>
+  <button id="start-btn">Start Call</button>
+  <button id="stop-btn">End Call</button>
 
+  <!-- Load Vapi SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web-sdk@latest"></script>
+
+  <!-- Initialize Vapi after SDK is loaded -->
   <script>
-    const vapi = new Vapi({
-      apiKey: "1c13d18f-bdb2-4195-9b54-5bd3d7f2be21"
-    });
-
-    function startAssistant() {
-      vapi.start({
-        assistant: {
-          id: "a0f2248e-143f-43a0-8130-7f386a16a94a"
-        }
+    window.addEventListener('DOMContentLoaded', () => {
+      const vapi = new Vapi({
+        apiKey: "1c13d18f-bdb2-4195-9b54-5bd3d7f2be21"
       });
-    }
 
-    function stopAssistant() {
-      vapi.stop();
-    }
+      document.getElementById("start-btn").addEventListener("click", () => {
+        vapi.start({
+          assistant: {
+            id: "a0f2248e-143f-43a0-8130-7f386a16a94a"
+          }
+        });
+      });
+
+      document.getElementById("stop-btn").addEventListener("click", () => {
+        vapi.stop();
+      });
+    });
   </script>
 </body>
 </html>
