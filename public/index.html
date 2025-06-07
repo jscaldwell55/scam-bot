@@ -5,15 +5,15 @@
     <title>Janet Scambot</title>
   </head>
   <body>
-    <h1>Janet Scambot (Widget Test)</h1>
+    <h1>Janet Scambot</h1>
 
     <script>
-      var vapiInstance = null;
-      const assistant = "a0f2248e-143f-43a0-8130-7f386a16a94a";
       const apiKey = "1c13d18f-bdb2-4195-9b54-5bd3d7f2be21";
+      const assistant = "a0f2248e-143f-43a0-8130-7f386a16a94a";
       const buttonConfig = {
-        position: "bottom-right", // or "top-left", etc.
-        // You can customize more here: color, size, etc.
+        position: "bottom-right",
+        theme: "dark", // or "light"
+        zIndex: 9999
       };
 
       (function (d, t) {
@@ -26,11 +26,17 @@
         s.parentNode.insertBefore(g, s);
 
         g.onload = function () {
-          vapiInstance = window.vapiSDK.run({
-            apiKey: apiKey,
-            assistant: assistant,
-            config: buttonConfig,
+          const vapi = window.vapiSDK.run({
+            apiKey,
+            assistant,
+            assistantOverrides: {}, // optional
+            config: buttonConfig
           });
+
+          if (vapi) {
+            // Optional: extend here, like vapi.on("call-start", () => ...)
+            console.log("Vapi widget loaded");
+          }
         };
       })(document, "script");
     </script>
