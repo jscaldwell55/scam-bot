@@ -50,11 +50,11 @@
   <button id="start-btn">Start Call</button>
   <button id="stop-btn" disabled>End Call</button>
 
-  <!-- Load Vapi SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web@2.3.5/dist/index.umd.js"></script>
+  <!-- ✅ Correct working Vapi SDK from unpkg -->
+  <script src="https://unpkg.com/@vapi-ai/web@latest/dist/index.umd.js"></script>
 
   <script>
-    // Prompt user for microphone access on page load
+    // Prompt for mic access immediately
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then(() => console.log("Microphone permission granted."))
       .catch(err => console.warn("Microphone permission denied:", err));
@@ -63,7 +63,7 @@
 
     try {
       if (typeof Vapi === 'undefined') {
-        console.error("Vapi class is undefined. Check SDK script loading.");
+        console.error("Vapi is undefined. SDK failed to load.");
       } else {
         const vapi = new Vapi('1c13d18f-bdb2-4195-9b54-5bd3d7f2be21');
 
@@ -72,7 +72,7 @@
         const statusEl = document.getElementById("status");
 
         const setStatus = (text) => {
-          if (statusEl) statusEl.textContent = text;
+          statusEl.textContent = text;
         };
 
         vapi.on('call-start', () => {
@@ -81,14 +81,8 @@
           stopBtn.disabled = false;
         });
 
-        vapi.on('speech-start', () => {
-          setStatus("🗣️ Speaking...");
-        });
-
-        vapi.on('speech-end', () => {
-          setStatus("🎤 Listening...");
-        });
-
+        vapi.on('speech-start', () => setStatus("🗣️ Speaking..."));
+        vapi.on('speech-end', () => setStatus("🎤 Listening..."));
         vapi.on('call-end', () => {
           setStatus("✅ Conversation ended.");
           startBtn.disabled = false;
@@ -96,35 +90,31 @@
         });
 
         vapi.on('error', (e) => {
-          console.error('Vapi error:', e);
+          console.error("Vapi error:", e);
           setStatus("⚠️ Error occurred.");
           startBtn.disabled = false;
           stopBtn.disabled = true;
         });
 
-        if (startBtn) {
-          startBtn.addEventListener("click", () => {
-            setStatus("⏳ Starting call...");
-            try {
-              vapi.start('a0f2248e-143f-43a0-8130-7f386a16a94a');
-            } catch (error) {
-              console.error("Error calling vapi.start():", error);
-              setStatus("❌ Failed to start call.");
-            }
-          });
-        }
+        startBtn.addEventListener("click", () => {
+          setStatus("⏳ Starting call...");
+          try {
+            vapi.start('a0f2248e-143f-43a0-8130-7f386a16a94a');
+          } catch (error) {
+            console.error("Error calling vapi.start():", error);
+            setStatus("❌ Failed to start call.");
+          }
+        });
 
-        if (stopBtn) {
-          stopBtn.addEventListener("click", () => {
-            try {
-              vapi.stop();
-              setStatus("🛑 Ending call...");
-            } catch (error) {
-              console.error("Error calling vapi.stop():", error);
-              setStatus("❌ Failed to stop call.");
-            }
-          });
-        }
+        stopBtn.addEventListener("click", () => {
+          try {
+            vapi.stop();
+            setStatus("🛑 Ending call...");
+          } catch (error) {
+            console.error("Error calling vapi.stop():", error);
+            setStatus("❌ Failed to stop call.");
+          }
+        });
       }
     } catch (error) {
       console.error("Vapi init error:", error);
