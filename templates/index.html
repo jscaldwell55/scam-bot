@@ -3,40 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Janet the ScamBot (Voice Only)</title>
+    <title>Janet the ScamBot - Vapi Voice Assistant</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
         body { 
-            overscroll-behavior-y: contain;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
         }
-        .recording { animation: pulse 1.5s infinite; }
-        @keyframes pulse { 
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
-        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        button:disabled { opacity: 0.6; cursor: not-allowed; }
-        #session-button.session-active { background-color: #EF4444 !important; }
-        #session-button.session-active:hover:not(:disabled) { background-color: #DC2626 !important; }
-        #session-button.session-inactive { background-color: #10B981 !important; }
-        #session-button.session-inactive:hover:not(:disabled) { background-color: #059669 !important; }
-        #mic-button { 
-            width: 120px; 
-            height: 120px; 
-            transition: all 0.3s ease;
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
         }
-        #mic-button:not(.recording) { background-color: #3B82F6; }
-        #mic-button:not(.recording):hover:not(:disabled) { 
-            background-color: #2563EB; 
-            transform: scale(1.1);
-        }
-        #mic-button.recording { 
-            background-color: #EF4444 !important;
-        }
+        .status-active { background-color: #10B981; }
+        .status-inactive { background-color: #6B7280; }
         .status-indicator {
             width: 12px;
             height: 12px;
@@ -44,322 +26,175 @@
             display: inline-block;
             margin-right: 8px;
         }
-        .status-active { background-color: #10B981; }
-        .status-inactive { background-color: #6B7280; }
     </style>
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen text-white">
     <div class="text-center mb-8">
         <h1 class="text-4xl sm:text-5xl font-bold mb-2">Janet the ScamBot</h1>
-        <p class="text-lg opacity-90">Voice Interaction Demo</p>
+        <p class="text-lg opacity-90">Vapi Voice Assistant Demo</p>
     </div>
     
-    <div class="bg-white bg-opacity-20 backdrop-blur-lg rounded-2xl p-8 shadow-2xl">
+    <div class="bg-white bg-opacity-20 backdrop-blur-lg rounded-2xl p-8 shadow-2xl max-w-md w-full">
         <div class="flex items-center justify-center mb-6">
             <span class="status-indicator" id="status-indicator"></span>
-            <span id="status-text" class="text-lg">Inactive</span>
+            <span id="status-text" class="text-lg">Disconnected</span>
         </div>
         
-        <div class="flex justify-center mb-6">
-            <button id="mic-button" 
-                    class="text-white rounded-full shadow-lg text-4xl font-bold hover:shadow-xl transform transition-all"
-                    disabled title="Start a session first">
-                🎤
-            </button>
+        <div class="text-center mb-6">
+            <div id="call-status" class="text-2xl font-bold mb-2">Ready to Connect</div>
+            <div id="call-timer" class="text-sm opacity-75 hidden">00:00</div>
         </div>
         
-        <button id="session-button" 
-                class="session-inactive text-white px-6 py-3 rounded-lg shadow-md transition-all duration-150 ease-in-out text-lg font-semibold w-full">
-            Start Session
+        <button id="call-button" 
+                class="w-full bg-green-500 hover:bg-green-600 text-white px-6 py-4 rounded-lg shadow-md transition-all duration-150 ease-in-out text-lg font-semibold">
+            Start Call with Janet
         </button>
         
-        <div id="error-container" class="mt-4 text-center text-sm"></div>
-        
-        <div id="loading-indicator" class="text-center mt-4 hidden">
-            <div class="loading mx-auto mb-2"></div>
-            <span class="text-sm opacity-90">Janet is thinking...</span>
-        </div>
+        <div id="error-container" class="mt-4 text-center text-sm text-red-300"></div>
     </div>
 
+    <!-- Vapi SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web@latest/dist/vapi.js"></script>
+    
     <script>
-        // Backend URL configuration
-        const BACKEND_BASE_URL = 'https://scam-bot-fwga.onrender.com';
-        console.log('Using backend URL:', BACKEND_BASE_URL);
-
+        // Configuration
+        const VAPI_PUBLIC_KEY = 'YOUR_VAPI_PUBLIC_KEY'; // Replace with your Vapi public key
+        const ASSISTANT_ID = 'YOUR_ASSISTANT_ID'; // Replace with your Janet assistant ID
+        
         // DOM elements
-        const micButton = document.getElementById('mic-button');
-        const sessionButton = document.getElementById('session-button');
-        const errorContainer = document.getElementById('error-container');
-        const loadingIndicator = document.getElementById('loading-indicator');
+        const callButton = document.getElementById('call-button');
         const statusIndicator = document.getElementById('status-indicator');
         const statusText = document.getElementById('status-text');
+        const callStatus = document.getElementById('call-status');
+        const callTimer = document.getElementById('call-timer');
+        const errorContainer = document.getElementById('error-container');
         
-        // Session state
-        let isRecording = false;
-        let isProcessing = false;
-        let isSessionActive = false;
-        let sessionId = null;
-        let isPlayingAudio = false;
-        let currentAudio = null;
-
-        // Initialize speech recognition
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        let recognition;
-
-        function updateStatus(active, text) {
-            statusIndicator.className = `status-indicator ${active ? 'status-active' : 'status-inactive'}`;
-            statusText.textContent = text || (active ? 'Active' : 'Inactive');
+        // Initialize Vapi
+        const vapi = new Vapi(VAPI_PUBLIC_KEY);
+        
+        // Call state
+        let isCallActive = false;
+        let callStartTime = null;
+        let timerInterval = null;
+        
+        // Update UI functions
+        function updateStatus(connected, text) {
+            statusIndicator.className = `status-indicator ${connected ? 'status-active' : 'status-inactive'}`;
+            statusText.textContent = text || (connected ? 'Connected' : 'Disconnected');
         }
-
+        
+        function updateCallButton(active) {
+            if (active) {
+                callButton.textContent = 'End Call';
+                callButton.classList.remove('bg-green-500', 'hover:bg-green-600');
+                callButton.classList.add('bg-red-500', 'hover:bg-red-600');
+            } else {
+                callButton.textContent = 'Start Call with Janet';
+                callButton.classList.remove('bg-red-500', 'hover:bg-red-600');
+                callButton.classList.add('bg-green-500', 'hover:bg-green-600');
+            }
+        }
+        
         function showError(message) {
             errorContainer.textContent = message;
-            errorContainer.style.color = '#FCA5A5';
             setTimeout(() => {
                 errorContainer.textContent = '';
             }, 5000);
         }
-
-        function clearError() { 
-            errorContainer.textContent = '';
+        
+        function updateTimer() {
+            if (!callStartTime) return;
+            
+            const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const seconds = (elapsed % 60).toString().padStart(2, '0');
+            callTimer.textContent = `${minutes}:${seconds}`;
         }
-
-        function setProcessing(processing) {
-            isProcessing = processing;
-            updateMicButtonState();
-            loadingIndicator.classList.toggle('hidden', !processing);
-            if (processing) {
-                clearError();
-                updateStatus(true, 'Processing...');
-            } else if (isSessionActive) {
-                updateStatus(true, 'Listening');
+        
+        // Vapi event listeners
+        vapi.on('call-start', () => {
+            console.log('Call started');
+            isCallActive = true;
+            callStartTime = Date.now();
+            updateStatus(true, 'Connected');
+            updateCallButton(true);
+            callStatus.textContent = 'Talking with Janet';
+            callTimer.classList.remove('hidden');
+            timerInterval = setInterval(updateTimer, 1000);
+        });
+        
+        vapi.on('call-end', () => {
+            console.log('Call ended');
+            isCallActive = false;
+            callStartTime = null;
+            updateStatus(false, 'Disconnected');
+            updateCallButton(false);
+            callStatus.textContent = 'Call Ended';
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
             }
-        }
-
-        function updateMicButtonState() {
-            const shouldDisable = !isSessionActive || isRecording || isProcessing || isPlayingAudio;
-            micButton.disabled = shouldDisable;
-            micButton.title = shouldDisable ? 
-                (!isSessionActive ? 'Start a session first' : 'Please wait...') : 
-                'Click to speak';
-        }
-
-        function updateSessionButton(active) {
-            sessionButton.textContent = active ? 'End Session' : 'Start Session';
-            sessionButton.classList.toggle('session-active', active);
-            sessionButton.classList.toggle('session-inactive', !active);
-        }
-
-        // Play audio directly without queue management
-        function playAudio(audioBase64) {
-            if (!audioBase64) return;
-            
-            isPlayingAudio = true;
-            updateMicButtonState();
-            updateStatus(true, 'Speaking...');
-            
-            currentAudio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
-            
-            currentAudio.addEventListener('ended', () => {
-                isPlayingAudio = false;
-                currentAudio = null;
-                updateMicButtonState();
-                if (isSessionActive) {
-                    updateStatus(true, 'Listening');
-                }
-            });
-            
-            currentAudio.addEventListener('error', (error) => {
-                console.error('Audio playback error:', error);
-                isPlayingAudio = false;
-                currentAudio = null;
-                updateMicButtonState();
-                if (isSessionActive) {
-                    updateStatus(true, 'Listening');
-                }
-            });
-            
-            currentAudio.play().catch(error => {
-                console.error('Audio play error:', error);
-                isPlayingAudio = false;
-                currentAudio = null;
-                updateMicButtonState();
-            });
-        }
-
-        // Session management
-        async function startSession() {
-            try {
-                sessionId = 'session_' + Date.now();
-                isSessionActive = true;
-                isProcessing = false;
-                
-                updateSessionButton(true);
-                updateMicButtonState();
-                updateStatus(true, 'Ready to listen');
-                clearError();
-                
-                console.log('Session started:', sessionId);
-                
-                // Send initial greeting through backend to establish context
-                setTimeout(() => {
-                    sendMessage("START_NEW_SESSION");
-                }, 500);
-                
-            } catch (error) {
-                console.error('Error starting session:', error);
-                showError('Failed to start session');
-                isSessionActive = false;
-                updateSessionButton(false);
-                updateStatus(false);
+            setTimeout(() => {
+                callStatus.textContent = 'Ready to Connect';
+                callTimer.classList.add('hidden');
+                callTimer.textContent = '00:00';
+            }, 2000);
+        });
+        
+        vapi.on('speech-start', () => {
+            console.log('User started speaking');
+            callStatus.textContent = 'Listening...';
+        });
+        
+        vapi.on('speech-end', () => {
+            console.log('User stopped speaking');
+            callStatus.textContent = 'Processing...';
+        });
+        
+        vapi.on('message', (message) => {
+            console.log('Message:', message);
+            if (message.type === 'transcript' && message.role === 'assistant') {
+                callStatus.textContent = 'Janet is speaking';
             }
-        }
-
-        async function endSession() {
+        });
+        
+        vapi.on('error', (error) => {
+            console.error('Vapi error:', error);
+            showError(error.message || 'An error occurred');
+        });
+        
+        // Call button handler
+        callButton.addEventListener('click', async () => {
             try {
-                if (currentAudio) {
-                    currentAudio.pause();
-                    currentAudio = null;
-                }
-                
-                if (sessionId) {
-                    fetch(`${BACKEND_BASE_URL}/end_session`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ user_id: sessionId })
-                    }).catch(err => console.error('Failed to end session on server:', err));
-                }
-                
-                isSessionActive = false;
-                sessionId = null;
-                isPlayingAudio = false;
-                updateSessionButton(false);
-                updateMicButtonState();
-                updateStatus(false, 'Session ended');
-                
-            } catch (error) {
-                console.error('Error ending session:', error);
-                showError('Failed to end session properly');
-            }
-        }
-
-        // Send message to backend
-        async function sendMessage(text) {
-            if (!isSessionActive || isProcessing) return;
-
-            console.log('Sending:', text);
-            setProcessing(true);
-
-            try {
-                const response = await fetch(`${BACKEND_BASE_URL}/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: text,
-                        user_id: sessionId
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                console.log('Received response');
-
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-
-                // Play audio immediately if available
-                if (data.audio) {
-                    playAudio(data.audio);
+                if (isCallActive) {
+                    // End the call
+                    vapi.stop();
                 } else {
-                    // Fallback to speech synthesis
-                    const utterance = new SpeechSynthesisUtterance(data.text);
-                    utterance.rate = 0.9;
-                    utterance.pitch = 1.1;
-                    window.speechSynthesis.speak(utterance);
+                    // Start the call
+                    callStatus.textContent = 'Connecting...';
+                    
+                    // Start call with your assistant
+                    await vapi.start({
+                        assistantId: ASSISTANT_ID,
+                        // Optional: pass custom variables
+                        variables: {
+                            userName: 'Friend', // Generic name for Janet to use
+                            sessionId: 'session_' + Date.now()
+                        }
+                    });
                 }
-
             } catch (error) {
-                console.error('Error:', error);
-                showError(error.message || 'Failed to get response');
-            } finally {
-                setProcessing(false);
-            }
-        }
-
-        // Initialize speech recognition
-        if (SpeechRecognition) {
-            recognition = new SpeechRecognition();
-            recognition.continuous = false;
-            recognition.interimResults = false;
-            recognition.lang = 'en-US';
-
-            recognition.onstart = () => {
-                console.log('Recognition started');
-                micButton.classList.add('recording');
-                isRecording = true;
-                updateMicButtonState();
-                updateStatus(true, 'Listening...');
-                clearError();
-            };
-
-            recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                console.log('Heard:', transcript);
-                sendMessage(transcript);
-            };
-
-            recognition.onerror = (event) => {
-                console.error('Recognition error:', event.error);
-                let errMessage = 'Speech error';
-                if (event.error === 'no-speech') errMessage = "Didn't hear anything. Try again?";
-                if (event.error === 'not-allowed') errMessage = "Mic access denied";
-                if (event.error === 'audio-capture') errMessage = "Mic problem detected";
-                showError(errMessage);
-                micButton.classList.remove('recording');
-                isRecording = false;
-                updateMicButtonState();
-                if (isSessionActive) updateStatus(true, 'Ready');
-            };
-
-            recognition.onend = () => {
-                console.log('Recognition ended');
-                micButton.classList.remove('recording');
-                isRecording = false;
-                updateMicButtonState();
-            };
-        }
-
-        // Event Listeners
-        sessionButton.addEventListener('click', async () => {
-            if (isProcessing) {
-                showError('Please wait...');
-                return;
-            }
-            
-            if (isSessionActive) {
-                await endSession();
-            } else {
-                await startSession();
+                console.error('Error toggling call:', error);
+                showError('Failed to connect. Please try again.');
+                updateStatus(false);
+                updateCallButton(false);
+                callStatus.textContent = 'Connection Failed';
             }
         });
-
-        micButton.addEventListener('click', () => {
-            if (!isSessionActive || isProcessing || isPlayingAudio) {
-                return;
-            }
-            
-            if (recognition && !isRecording) {
-                recognition.start();
-            }
-        });
-
+        
         // Initialize
         updateStatus(false);
-        updateMicButtonState();
-        console.log('App initialized');
+        console.log('Vapi assistant ready');
     </script>
 </body>
 </html>
