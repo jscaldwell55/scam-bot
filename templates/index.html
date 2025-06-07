@@ -115,8 +115,10 @@
         let isProcessing = false;
         let isSessionActive = false;
         let sessionId = null;
+        let messageCount = 0;
 
         function showError(message) {
+            console.error('Error:', message);
             errorContainer.textContent = message;
             setTimeout(() => {
                 errorContainer.textContent = '';
@@ -124,6 +126,7 @@
         }
 
         function setProcessing(processing) {
+            console.log(`Setting processing state to: ${processing}`);
             isProcessing = processing;
             sendButton.disabled = processing || !isSessionActive;
             micButton.disabled = processing || !isSessionActive;
@@ -132,6 +135,7 @@
         }
 
         function setSessionActive(active) {
+            console.log(`Setting session active to: ${active}`);
             isSessionActive = active;
             sessionButton.textContent = active ? 'End Session' : 'Start Session';
             sessionButton.classList.toggle('session-active', active);
@@ -141,12 +145,13 @@
             micButton.disabled = !active;
             
             if (!active) {
-                // Clear chat when session ends
+                console.log('Clearing session state');
                 chatMessages.innerHTML = '';
                 sessionId = null;
+                messageCount = 0;
             } else {
-                // Generate new session ID when starting
                 sessionId = 'session_' + Date.now();
+                console.log('Starting new session:', sessionId);
             }
         }
 
@@ -175,11 +180,14 @@
         };
 
         function addMessage(content, isUser) {
+            console.log(`Adding ${isUser ? 'user' : 'assistant'} message:`, content.substring(0, 50) + '...');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
             messageDiv.textContent = content;
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
+            messageCount++;
+            console.log(`Total messages in chat: ${messageCount}`);
         }
 
         async function sendMessage() {
@@ -189,14 +197,22 @@
             }
 
             const message = userInput.value.trim();
-            if (!message || isProcessing) return;
+            if (!message || isProcessing) {
+                console.log('Message send blocked:', { message: !!message, isProcessing });
+                return;
+            }
 
+            console.log('Preparing to send message:', message.substring(0, 50) + '...');
             setProcessing(true);
             addMessage(message, true);
             userInput.value = '';
 
             try {
-                console.log('Sending message to server...');
+                console.log('Sending message to server...', {
+                    sessionId,
+                    messageCount,
+                    isSessionActive
+                });
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: {
@@ -213,7 +229,11 @@
                 }
 
                 const data = await response.json();
-                console.log('API Response received:', data);
+                console.log('API Response received:', {
+                    hasText: !!data.text,
+                    hasAudio: !!data.audio,
+                    error: data.error
+                });
                 
                 if (data.error) {
                     console.error('API Error:', data.error);
@@ -272,7 +292,7 @@
                     console.log('No audio data in response');
                 }
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Error in sendMessage:', error);
                 showError('Sorry, something went wrong. Please try again.');
                 setProcessing(false);
             }
@@ -280,6 +300,11 @@
 
         // Handle session button click
         sessionButton.addEventListener('click', () => {
+            console.log('Session button clicked, current state:', {
+                isProcessing,
+                isSessionActive,
+                messageCount
+            });
             if (isProcessing) {
                 showError('Please wait for the current message to finish processing');
                 return;
@@ -289,6 +314,11 @@
 
         // Handle microphone button click
         micButton.addEventListener('click', () => {
+            console.log('Mic button clicked, current state:', {
+                isProcessing,
+                isSessionActive,
+                isRecording
+            });
             if (isProcessing || !isSessionActive) return;
             
             if (!isRecording) {
@@ -307,9 +337,18 @@
             }
         });
 
-        sendButton.addEventListener('click', sendMessage);
+        sendButton.addEventListener('click', () => {
+            console.log('Send button clicked, current state:', {
+                isProcessing,
+                isSessionActive,
+                messageCount
+            });
+            sendMessage();
+        });
+
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !isProcessing && isSessionActive) {
+                console.log('Enter key pressed, sending message');
                 sendMessage();
             }
         });
