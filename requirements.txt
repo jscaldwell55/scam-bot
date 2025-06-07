@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-openai
-python-dotenv
-elevenlabs==0.2.24
-python-multipart
-jinja2
