@@ -6,23 +6,58 @@
   <style>
     body {
       font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 40px 20px;
+      background-color: #f5f5f5;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      background-color: #f5f5f5;
     }
 
     h1 {
+      text-align: center;
       color: #222;
-      margin-bottom: 30px;
+      margin-bottom: 20px;
+      font-size: 2.2rem;
+    }
+
+    .persona {
+      max-width: 600px;
+      text-align: center;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      font-size: 16px;
+      line-height: 1.5;
+      color: #444;
+    }
+
+    .persona h2 {
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .persona ul {
+      list-style: disc;
+      padding-left: 20px;
+      text-align: left;
     }
   </style>
 </head>
 <body>
   <h1>Janet Scambot</h1>
+
+  <div class="persona">
+    <h2>Persona:</h2>
+    <ul>
+      <li>Janet "Jan" Miller, middle-aged, wife named Riley</li>
+      <li>On the surface an old friend, in reality a scammer</li>
+      <li>Uses social engineering to try to get money out of the user</li>
+      <li>Tactics include fake crisis, urgency, and emotional manipulation</li>
+    </ul>
+  </div>
 
   <script>
     const apiKey = "1c13d18f-bdb2-4195-9b54-5bd3d7f2be21";
@@ -50,7 +85,7 @@
         });
 
         if (vapi) {
-          console.log("Vapi initialized successfully.");
+          console.log("Vapi widget loaded");
         }
       };
     })(document, "script");
