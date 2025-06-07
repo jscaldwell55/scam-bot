@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Janet Scambot</title>
+  <title>Janet Scambot - Vapi Test</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -40,28 +40,71 @@
   <button id="start-btn">Start Call</button>
   <button id="stop-btn">End Call</button>
 
+  <!-- Load Vapi SDK as per their documentation -->
+  <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web-sdk"></script>
+
   <script>
-    // Dynamically load the Vapi SDK
-    const script = document.createElement('script');
-    script.src = "https://cdn.jsdelivr.net/npm/@vapi-ai/web-sdk@latest";
-    script.onload = () => {
-      const vapi = new Vapi({
-        apiKey: "1c13d18f-bdb2-4195-9b54-5bd3d7f2be21"
-      });
+    console.log("Attempting to initialize Vapi SDK...");
 
-      document.getElementById("start-btn").addEventListener("click", () => {
-        vapi.start({
-          assistant: {
-            id: "a0f2248e-143f-43a0-8130-7f386a16a94a"
-          }
+    // This code will run after the above script has been loaded and parsed (or failed)
+    try {
+      if (typeof Vapi === 'undefined') {
+        console.error("Vapi class is undefined. The SDK script likely failed to load or execute correctly. Check the Network tab for errors with the SDK script URL.");
+        // You could add a more robust check or wait mechanism here if needed,
+        // but with CORB, the script execution is likely blocked entirely.
+      } else {
+        console.log("Vapi class found. Initializing...");
+        const vapi = new Vapi({
+          apiKey: "1c13d18f-bdb2-4195-9b54-5bd3d7f2be21" // Your Public API Key
         });
-      });
+        console.log("Vapi SDK initialized.");
 
-      document.getElementById("stop-btn").addEventListener("click", () => {
-        vapi.stop();
-      });
-    };
-    document.head.appendChild(script);
+        // Optional: Add event listeners to see Vapi's internal state
+        vapi.on('call-start', () => console.log('Vapi Event: call-start'));
+        vapi.on('call-end', () => console.log('Vapi Event: call-end'));
+        vapi.on('speech-start', () => console.log('Vapi Event: speech-start'));
+        vapi.on('speech-end', () => console.log('Vapi Event: speech-end'));
+        vapi.on('error', (e) => console.error('Vapi Event: error', e));
+        // vapi.on('message', (message) => console.log('Vapi Event: Message:', message)); // Can be verbose
+
+        const startBtn = document.getElementById("start-btn");
+        const stopBtn = document.getElementById("stop-btn");
+
+        if (startBtn) {
+          startBtn.addEventListener("click", () => {
+            console.log("Start Call button clicked.");
+            try {
+              vapi.start({
+                assistant: {
+                  id: "a0f2248e-143f-43a0-8130-7f386a16a94a" // Your Assistant ID
+                }
+              });
+              console.log("vapi.start() called.");
+            } catch (error) {
+              console.error("Error calling vapi.start():", error);
+            }
+          });
+        } else {
+          console.error("Start button not found!");
+        }
+
+        if (stopBtn) {
+          stopBtn.addEventListener("click", () => {
+            console.log("End Call button clicked.");
+            try {
+              vapi.stop();
+              console.log("vapi.stop() called.");
+            } catch (error) {
+              console.error("Error calling vapi.stop():", error);
+            }
+          });
+        } else {
+          console.error("Stop button not found!");
+        }
+      }
+    } catch (error) {
+      console.error("Error in Vapi initialization block:", error);
+    }
   </script>
 </body>
 </html>
