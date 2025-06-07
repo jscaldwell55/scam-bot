@@ -195,16 +195,15 @@
                 
                 updateSessionButton(true);
                 updateMicButtonState();
-                updateStatus(true, 'Session started');
+                updateStatus(true, 'Ready to listen');
                 clearError();
                 
-                // Play initial greeting
-                const greeting = new SpeechSynthesisUtterance("Hi there! It's Janet... remember me? It's been so long! How ARE you?");
-                greeting.rate = 0.9;
-                greeting.pitch = 1.1;
-                window.speechSynthesis.speak(greeting);
-                
                 console.log('Session started:', sessionId);
+                
+                // Send initial greeting through backend to establish context
+                setTimeout(() => {
+                    sendMessage("START_NEW_SESSION");
+                }, 500);
                 
             } catch (error) {
                 console.error('Error starting session:', error);

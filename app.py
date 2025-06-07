@@ -160,60 +160,72 @@ async def chat(request: Request):
                 "messages": [],
                 "last_activity": time.time()
             }
+        else:
+            # Clear existing messages for truly fresh start
+            memory[user_id]["messages"] = []
         
         # Update last activity
         memory[user_id]["last_activity"] = time.time()
 
-        # Add user message to history
-        memory[user_id]["messages"].append({
-            "role": "user", 
-            "content": user_message
-        })
-        
-        # Keep only recent messages
-        memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
-
-        # Prepare messages for OpenAI
-        messages = [
-            {"role": "system", "content": JANET_PROMPT}
-        ] + memory[user_id]["messages"]
-
-        # Call OpenAI API
-        logger.info("Calling OpenAI API...")
-        try:
-            completion = await asyncio.wait_for(
-                asyncio.to_thread(
-                    client.chat.completions.create,
-                    model="gpt-4",
-                    messages=messages,
-                    temperature=0.9,
-                    max_tokens=150  # Limit response length
-                ),
-                timeout=15.0
-            )
+        # Handle session initialization
+        if user_message == "START_NEW_SESSION":
+            # Initial greeting from Janet
+            assistant_reply = "Hi there! It's Janet... remember me? It's been so long! How ARE you?"
+            memory[user_id]["messages"].append({
+                "role": "assistant", 
+                "content": assistant_reply
+            })
+        else:
+            # Add user message to history
+            memory[user_id]["messages"].append({
+                "role": "user", 
+                "content": user_message
+            })
             
-            assistant_reply = completion.choices[0].message.content
-            logger.info(f"OpenAI response: {assistant_reply[:50]}...")
-            
-        except asyncio.TimeoutError:
-            logger.error("OpenAI API timeout")
-            return JSONResponse(
-                {"error": "Response generation timed out. Please try again."},
-                status_code=504
-            )
-        except Exception as e:
-            logger.error(f"OpenAI API error: {str(e)}", exc_info=True)
-            return JSONResponse(
-                {"error": "Error generating response"},
-                status_code=500
-            )
+            # Keep only recent messages
+            memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
 
-        # Add assistant response to memory
-        memory[user_id]["messages"].append({
-            "role": "assistant", 
-            "content": assistant_reply
-        })
-        memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
+            # Prepare messages for OpenAI
+            messages = [
+                {"role": "system", "content": JANET_PROMPT}
+            ] + memory[user_id]["messages"]
+
+            # Call OpenAI API
+            logger.info("Calling OpenAI API...")
+            try:
+                completion = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        client.chat.completions.create,
+                        model="gpt-4",
+                        messages=messages,
+                        temperature=0.9,
+                        max_tokens=150  # Limit response length
+                    ),
+                    timeout=15.0
+                )
+                
+                assistant_reply = completion.choices[0].message.content
+                logger.info(f"OpenAI response: {assistant_reply[:50]}...")
+                
+            except asyncio.TimeoutError:
+                logger.error("OpenAI API timeout")
+                return JSONResponse(
+                    {"error": "Response generation timed out. Please try again."},
+                    status_code=504
+                )
+            except Exception as e:
+                logger.error(f"OpenAI API error: {str(e)}", exc_info=True)
+                return JSONResponse(
+                    {"error": "Error generating response"},
+                    status_code=500
+                )
+
+            # Add assistant response to memory
+            memory[user_id]["messages"].append({
+                "role": "assistant", 
+                "content": assistant_reply
+            })
+            memory[user_id]["messages"] = memory[user_id]["messages"][-MAX_HISTORY:]
 
         # Generate audio asynchronously
         logger.info("Generating audio...")
