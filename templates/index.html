@@ -35,7 +35,7 @@
 <body class="bg-gray-100 text-gray-800 font-sans flex flex-col h-screen">
     <header class="container mx-auto px-4 py-4 max-w-2xl">
         <div class="flex justify-between items-center">
-            <h1 class="text-2xl sm:text-3xl font-bold text-pink-700">Janet the ScamBot</h1>
+            <h1 class="text-2xl sm:text-3xl font-bold text-blue-600">Janet the ScamBot</h1>
             <button id="session-button" class="session-inactive text-white px-4 py-2 sm:px-6 sm:py-2 rounded-lg shadow-md transition-colors duration-150 ease-in-out text-sm sm:text-base">Start Session</button>
         </div>
     </header>
@@ -48,9 +48,9 @@
             
             <div class="mt-auto pt-4 border-t border-gray-200">
                 <!-- Text input and Send button REMOVED -->
-                <div class="mic-button-container"> {/* Container to center the mic button */}
+                <div class="mic-button-container">
                     <button id="mic-button" 
-                            class="text-white px-6 py-4 rounded-full shadow-md text-2xl" /* Larger, circular */
+                            class="text-white px-6 py-4 rounded-full shadow-md text-2xl"
                             disabled title="Start Voice Input">
                         🎤
                     </button>
@@ -83,8 +83,19 @@
         let isSessionActive = false;
         let sessionId = null;
         let userTranscriptForDisplay = ""; // To hold transcript for adding to chat
+        let messageCount = 0;
+        let audioQueue = [];
+        let isPlayingAudio = false;
 
-        function showError(message) { errorContainer.textContent = message; console.error('UI Error:', message); }
+        function showError(message) {
+            const errorDiv = document.getElementById('error-container');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            setTimeout(() => {
+                errorDiv.classList.add('hidden');
+            }, 5000);
+        }
+
         function clearError() { errorContainer.textContent = ''; }
 
         function setProcessing(processing) {
@@ -276,6 +287,234 @@
             console.error("CRITICAL: BACKEND_BASE_URL not set!");
             sessionButton.disabled = true; micButton.disabled = true;
         }
+
+        // Session state
+        let isSessionActive = false;
+        let sessionId = null;
+        let messageCount = 0;
+        let isProcessing = false;
+        let audioQueue = [];
+        let isPlayingAudio = false;
+
+        // Session management
+        async function startSession() {
+            try {
+                console.log('Starting new session...');
+                sessionId = 'session_' + Date.now();
+                isSessionActive = true;
+                messageCount = 0;
+                document.getElementById('session-button').textContent = 'End Session';
+                document.getElementById('session-button').classList.remove('bg-green-600', 'hover:bg-green-700');
+                document.getElementById('session-button').classList.add('bg-red-600', 'hover:bg-red-700');
+                document.getElementById('mic-button').classList.remove('opacity-50', 'cursor-not-allowed');
+                document.getElementById('mic-button').disabled = false;
+                console.log('Session started with ID:', sessionId);
+            } catch (error) {
+                console.error('Error starting session:', error);
+                showError('Failed to start session');
+            }
+        }
+
+        async function endSession() {
+            try {
+                console.log('Ending session:', sessionId);
+                if (sessionId) {
+                    const response = await fetch('/end_session', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ user_id: sessionId })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to end session');
+                    }
+                }
+                
+                isSessionActive = false;
+                sessionId = null;
+                messageCount = 0;
+                document.getElementById('session-button').textContent = 'Start Session';
+                document.getElementById('session-button').classList.remove('bg-red-600', 'hover:bg-red-700');
+                document.getElementById('session-button').classList.add('bg-green-600', 'hover:bg-green-700');
+                document.getElementById('mic-button').classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('mic-button').disabled = true;
+                document.getElementById('chat-messages').innerHTML = '';
+                console.log('Session ended');
+            } catch (error) {
+                console.error('Error ending session:', error);
+                showError('Failed to end session');
+            }
+        }
+
+        // Audio queue management
+        function playNextInQueue() {
+            if (audioQueue.length > 0 && !isPlayingAudio) {
+                const audio = audioQueue.shift();
+                isPlayingAudio = true;
+                audio.play();
+                audio.onended = () => {
+                    isPlayingAudio = false;
+                    playNextInQueue();
+                };
+            }
+        }
+
+        // Message handling
+        function addMessage(content, isUser = false) {
+            const messagesDiv = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `p-4 rounded-lg mb-4 max-w-[80%] ${isUser ? 'bg-blue-100 ml-auto' : 'bg-gray-100'}`;
+            messageDiv.textContent = content;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Send message with timeout and retry
+        async function sendMessage(text) {
+            if (!isSessionActive) {
+                showError('Please start a session first');
+                return;
+            }
+
+            if (isProcessing) {
+                showError('Please wait for the current message to finish processing');
+                return;
+            }
+
+            console.log('Sending message:', text);
+            console.log('Current session state:', {
+                isSessionActive,
+                sessionId,
+                messageCount,
+                isProcessing
+            });
+
+            setProcessing(true);
+            addMessage(text, true);
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: text,
+                        user_id: sessionId
+                    }),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Received response:', data);
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                addMessage(data.text);
+                messageCount++;
+
+                if (data.audio) {
+                    const audio = new Audio('data:audio/mp3;base64,' + data.audio);
+                    audioQueue.push(audio);
+                    if (!isPlayingAudio) {
+                        playNextInQueue();
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error sending message:', error);
+                if (error.name === 'AbortError') {
+                    showError('Request timed out. Please try again.');
+                } else {
+                    showError(error.message || 'Failed to send message');
+                }
+            } finally {
+                setProcessing(false);
+                console.log('Message processing completed');
+                console.log('Updated session state:', {
+                    isSessionActive,
+                    sessionId,
+                    messageCount,
+                    isProcessing
+                });
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('session-button').addEventListener('click', () => {
+            console.log('Session button clicked');
+            console.log('Current session state:', {
+                isSessionActive,
+                sessionId,
+                messageCount,
+                isProcessing
+            });
+            
+            if (isSessionActive) {
+                endSession();
+            } else {
+                startSession();
+            }
+        });
+
+        document.getElementById('mic-button').addEventListener('click', async () => {
+            if (!isSessionActive) {
+                showError('Please start a session first');
+                return;
+            }
+
+            if (isProcessing) {
+                showError('Please wait for the current message to finish processing');
+                return;
+            }
+
+            try {
+                const recognition = new webkitSpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+
+                recognition.onstart = () => {
+                    console.log('Voice recognition started');
+                    document.getElementById('mic-button').classList.add('bg-red-600');
+                };
+
+                recognition.onresult = (event) => {
+                    const text = event.results[0][0].transcript;
+                    console.log('Voice recognition result:', text);
+                    sendMessage(text);
+                };
+
+                recognition.onerror = (event) => {
+                    console.error('Voice recognition error:', event.error);
+                    showError('Voice recognition failed. Please try again.');
+                    document.getElementById('mic-button').classList.remove('bg-red-600');
+                };
+
+                recognition.onend = () => {
+                    console.log('Voice recognition ended');
+                    document.getElementById('mic-button').classList.remove('bg-red-600');
+                };
+
+                recognition.start();
+            } catch (error) {
+                console.error('Error starting voice recognition:', error);
+                showError('Voice recognition is not supported in your browser');
+            }
+        });
     </script>
 </body>
 </html>
