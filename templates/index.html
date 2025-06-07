@@ -3,99 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Janet the ScamBot</title>
-    <!-- Favicon: Make sure this path is correct if you have one, or remove if not -->
+    <title>Janet the ScamBot (Voice Only)</title>
     <!-- <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico"> -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-        body {
-            overscroll-behavior-y: contain; /* Prevents pull-to-refresh on mobile */
-        }
-        .chat-container {
-            height: calc(100vh - 220px); /* Adjusted for better fit, considering header and input area */
+        body { overscroll-behavior-y: contain; }
+        .chat-container { height: calc(100vh - 180px); display: flex; flex-direction: column; } /* Adjusted height */
+        .message-scroll-area { flex-grow: 1; overflow-y: auto; padding: 8px; }
+        .message { max-width: 80%; margin-bottom: 10px; padding: 10px 15px; border-radius: 15px; word-wrap: break-word; line-height: 1.4; }
+        .user-message { background-color: #DBEAFE; margin-left: auto; color: #1E3A8A; align-self: flex-end; }
+        .assistant-message { background-color: #FCE7F3; margin-right: auto; color: #831843; align-self: flex-start; }
+        .system-message { background-color: #F3F4F6; color: #4B5563; font-style: italic; text-align: center; font-size: 0.875rem; width: 100%; align-self: center; }
+        .recording { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } 100% { opacity: 1; transform: scale(1); } }
+        .error-message { color: #DC2626; font-size: 0.875rem; text-align: center; margin-top: 0.5rem; height: 1.5rem; line-height: 1.5rem; }
+        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(0,0,0,.1); border-radius: 50%; border-top-color: #3b82f6; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .session-active { background-color: #10B981 !important; }
+        .session-inactive { background-color: #6B7280 !important; }
+        #mic-button.recording { background-color: #EF4444 !important; /* Red when recording */ }
+        #mic-button:not(.recording) { background-color: #3B82F6; /* Blue when ready */ }
+        #mic-button:not(.recording):hover:not(:disabled) { background-color: #2563EB; }
+        .mic-button-container { /* Center the mic button */
             display: flex;
-            flex-direction: column;
-        }
-        .message-scroll-area {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 8px;
-        }
-        .message {
-            max-width: 80%;
-            margin-bottom: 10px; /* Consistent margin */
-            padding: 10px 15px;
-            border-radius: 15px;
-            word-wrap: break-word;
-            line-height: 1.4;
-        }
-        .user-message {
-            background-color: #DBEAFE; /* Tailwind blue-100 */
-            margin-left: auto;
-            color: #1E3A8A; /* Tailwind blue-800 */
-            align-self: flex-end;
-        }
-        .assistant-message {
-            background-color: #FCE7F3; /* Tailwind pink-100 */
-            margin-right: auto;
-            color: #831843; /* Tailwind pink-800 */
-            align-self: flex-start;
-        }
-        .system-message { /* For session ended/started messages */
-            background-color: #F3F4F6; /* Tailwind gray-100 */
-            color: #4B5563; /* Tailwind gray-600 */
-            font-style: italic;
-            text-align: center;
-            font-size: 0.875rem;
-            width: 100%;
-            align-self: center;
-        }
-        .recording {
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.1); }
-            100% { opacity: 1; transform: scale(1); }
-        }
-        .error-message {
-            color: #DC2626; /* Tailwind red-600 */
-            font-size: 0.875rem; /* text-sm */
-            text-align: center;
-            margin-top: 0.5rem; /* mt-2 */
-            height: 1.5rem; /* Ensure space even when empty for consistent layout */
-            line-height: 1.5rem;
-        }
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(0,0,0,.1);
-            border-radius: 50%;
-            border-top-color: #3b82f6; /* Tailwind blue-500 */
-            animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        .session-active {
-            background-color: #10B981 !important; /* Tailwind green-500 */
-        }
-        .session-inactive {
-            background-color: #6B7280 !important; /* Tailwind gray-500 */
-        }
-        #mic-button.recording {
-            background-color: #EF4444 !important; /* Tailwind red-500 */
-        }
-        #mic-button:not(.recording) { /* Specific default style for mic button */
-            background-color: #3B82F6; /* Tailwind blue-500 */
-        }
-        #mic-button:not(.recording):hover:not(:disabled) {
-            background-color: #2563EB; /* Tailwind blue-600 for mic hover */
+            justify-content: center;
+            align-items: center;
         }
     </style>
 </head>
@@ -103,35 +36,22 @@
     <header class="container mx-auto px-4 py-4 max-w-2xl">
         <div class="flex justify-between items-center">
             <h1 class="text-2xl sm:text-3xl font-bold text-pink-700">Janet the ScamBot</h1>
-            <button id="session-button" 
-                    class="session-inactive text-white px-4 py-2 sm:px-6 sm:py-2 rounded-lg shadow-md transition-colors duration-150 ease-in-out text-sm sm:text-base">
-                Start Session
-            </button>
+            <button id="session-button" class="session-inactive text-white px-4 py-2 sm:px-6 sm:py-2 rounded-lg shadow-md transition-colors duration-150 ease-in-out text-sm sm:text-base">Start Session</button>
         </div>
     </header>
     
     <main class="container mx-auto px-4 max-w-2xl flex-grow flex flex-col overflow-hidden">
         <div class="bg-white rounded-lg shadow-xl p-4 flex flex-col flex-grow">
             <div id="chat-messages-container" class="chat-container">
-                <div id="chat-messages" class="message-scroll-area">
-                    <!-- Messages will be added here -->
-                </div>
+                <div id="chat-messages" class="message-scroll-area"></div>
             </div>
             
             <div class="mt-auto pt-4 border-t border-gray-200">
-                <div class="flex gap-2 items-center">
-                    <input type="text" id="user-input" 
-                           class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                           placeholder="Type or use mic..."
-                           disabled>
-                    <button id="send-button" 
-                            class="bg-blue-500 text-white px-4 py-3 sm:px-6 sm:py-3 rounded-lg hover:bg-blue-600 transition-colors shadow-md"
-                            disabled>
-                        Send
-                    </button>
+                <!-- Text input and Send button REMOVED -->
+                <div class="mic-button-container"> {/* Container to center the mic button */}
                     <button id="mic-button" 
-                            class="text-white px-4 py-3 rounded-lg transition-colors shadow-md text-xl"
-                            disabled title="Voice Input">
+                            class="text-white px-6 py-4 rounded-full shadow-md text-2xl" /* Larger, circular */
+                            disabled title="Start Voice Input">
                         🎤
                     </button>
                 </div>
@@ -146,15 +66,13 @@
 
     <script>
         // IMPORTANT: REPLACE WITH YOUR ACTUAL DEPLOYED BACKEND URL
-        const BACKEND_BASE_URL = "https://scam-bot-fwga.onrender.com"; 
-        // Example: const BACKEND_BASE_URL = "https://janet-backend.onrender.com";
-        // For local testing (if backend is local and frontend is local):
-        // const BACKEND_BASE_URL = "http://localhost:8000"; 
+        const BACKEND_BASE_URL = "https://scam-bot-fwga.onrender.com"; // <<< YOU STILL NEED TO SET THIS
+        // Example: const BACKEND_BASE_URL = "https://janet-api.onrender.com";
 
 
         const chatMessagesContainer = document.getElementById('chat-messages');
-        const userInput = document.getElementById('user-input');
-        const sendButton = document.getElementById('send-button');
+        // const userInput = document.getElementById('user-input'); // REMOVED
+        // const sendButton = document.getElementById('send-button'); // REMOVED
         const micButton = document.getElementById('mic-button');
         const sessionButton = document.getElementById('session-button');
         const errorContainer = document.getElementById('error-container');
@@ -164,49 +82,37 @@
         let isProcessing = false;
         let isSessionActive = false;
         let sessionId = null;
-        let messageCount = 0; // To track user messages if needed for turn logic
+        let userTranscriptForDisplay = ""; // To hold transcript for adding to chat
 
-        function showError(message) {
-            console.error('Displaying Error:', message);
-            errorContainer.textContent = message;
-        }
-
-        function clearError() {
-            errorContainer.textContent = '';
-        }
+        function showError(message) { errorContainer.textContent = message; console.error('UI Error:', message); }
+        function clearError() { errorContainer.textContent = ''; }
 
         function setProcessing(processing) {
-            console.log(`UI: Setting processing state to: ${processing}`);
             isProcessing = processing;
-            const disableControls = processing || !isSessionActive;
-            sendButton.disabled = disableControls;
-            micButton.disabled = disableControls;
-            userInput.disabled = disableControls;
+            const disableMic = processing || !isSessionActive || isRecording; // Mic also disabled if already recording
+            micButton.disabled = disableMic;
             loadingIndicator.classList.toggle('hidden', !processing);
             if (processing) clearError();
         }
 
         function setSessionActiveState(active) {
-            console.log(`UI: Setting session active to: ${active}`);
             isSessionActive = active;
             sessionButton.textContent = active ? 'End Session' : 'Start Session';
             sessionButton.classList.toggle('session-active', active);
             sessionButton.classList.toggle('session-inactive', !active);
             
-            userInput.disabled = !active || isProcessing;
-            sendButton.disabled = !active || isProcessing;
-            micButton.disabled = !active || isProcessing;
+            micButton.disabled = !active || isProcessing || isRecording;
             
             if (!active) {
-                console.log('UI: Clearing session state.');
-                chatMessagesContainer.innerHTML = ''; // Clear messages
-                sessionId = null;
-                messageCount = 0;
-                userInput.value = '';
+                chatMessagesContainer.innerHTML = ''; sessionId = null;
                 addMessage("Session ended. Click 'Start Session' to chat with Janet again.", 'system');
+                if (isRecording) { // Stop recording if session ends
+                    recognition.stop();
+                    micButton.classList.remove('recording');
+                    isRecording = false;
+                }
             } else {
                 sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-                console.log('UI: Starting new session:', sessionId);
                 chatMessagesContainer.innerHTML = '';
                 addMessage("Hi there! It's Janet... remember me? It's been so long! How ARE you?", 'assistant');
             }
@@ -219,16 +125,21 @@
         if (SpeechRecognition) {
             recognition = new SpeechRecognition();
             recognition.continuous = false;
-            recognition.interimResults = false;
+            recognition.interimResults = false; // We only want the final result
             recognition.lang = 'en-US';
 
+            recognition.onstart = () => {
+                console.log('UI: Speech recognition started by API.');
+                micButton.classList.add('recording');
+                isRecording = true;
+                micButton.disabled = true; // Disable while recording
+                clearError(); // Clear any previous errors
+            };
+
             recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                console.log('UI: Speech recognition result:', transcript);
-                userInput.value = transcript;
-                micButton.classList.remove('recording');
-                isRecording = false;
-                sendMessage();
+                userTranscriptForDisplay = event.results[0][0].transcript;
+                console.log('UI: Speech recognition final result:', userTranscriptForDisplay);
+                // sendMessage will be called in onend after transcript is set and recording stops
             };
 
             recognition.onerror = (event) => {
@@ -236,219 +147,134 @@
                 let errMessage = `Speech error: ${event.error}.`;
                 if (event.error === 'no-speech') errMessage = "Didn't hear anything. Try again?";
                 if (event.error === 'not-allowed' || event.error === 'service-not-allowed') errMessage = "Mic access denied. Check browser permissions.";
+                if (event.error === 'audio-capture') errMessage = "Mic problem. Ensure it's connected & working.";
                 showError(errMessage);
-                micButton.classList.remove('recording');
+                micButton.classList.remove('recording'); // Ensure UI reflects stop
                 isRecording = false;
-                setProcessing(false);
+                setProcessing(false); // Reset processing if error occurs during recognition phase
+                micButton.disabled = !isSessionActive; // Re-enable mic if session is active
             };
 
             recognition.onend = () => {
                 console.log('UI: Speech recognition ended.');
-                if (isRecording) { // If ended unexpectedly
-                    micButton.classList.remove('recording');
-                    isRecording = false;
+                micButton.classList.remove('recording');
+                isRecording = false;
+                micButton.disabled = !isSessionActive || isProcessing; // Re-evaluate mic button state
+
+                if (userTranscriptForDisplay && userTranscriptForDisplay.trim() !== "") {
+                    sendMessage(userTranscriptForDisplay.trim());
+                    userTranscriptForDisplay = ""; // Clear after sending
+                } else if (isSessionActive && !isProcessing) { // If ended without result and not due to error already handled
+                    // Optionally show a message like "No speech detected" or just re-enable mic
+                    console.log("UI: Recognition ended without a valid transcript.");
                 }
             };
         } else {
-            console.warn('UI: Speech Recognition API not supported.');
             micButton.disabled = true;
-            micButton.title = "Voice input not supported in your browser.";
+            micButton.title = "Voice input not supported.";
+            showError("Voice input is not supported by your browser.");
         }
 
-        function addMessage(content, type = 'user') { // type can be 'user', 'assistant', or 'system'
-            const TSTAMP = new Date().toLocaleTimeString();
-            console.log(`UI: [${TSTAMP}] Adding ${type.toUpperCase()} message: "${content.substring(0, 50)}..."`);
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}-message`;
-            messageDiv.textContent = content;
-            chatMessagesContainer.appendChild(messageDiv);
+        function addMessage(content, type = 'user') {
+            const div = document.createElement('div');
+            div.className = `message ${type}-message`; div.textContent = content;
+            chatMessagesContainer.appendChild(div);
             chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
-            if (type === 'user') messageCount++;
         }
 
-        async function sendMessage() {
-            if (!isSessionActive) {
-                showError('Please start a session first.');
-                return;
+        async function sendMessage(messageText) { // Now takes messageText as an argument
+            if (!isSessionActive) { showError('Please start a session first.'); return; }
+            // messageText comes directly from speech recognition result now
+            if (!messageText) { console.log('UI: sendMessage called with no messageText.'); return; }
+            if (isProcessing) { console.log('UI: Message send blocked: already processing.'); return; }
+            if (!BACKEND_BASE_URL || BACKEND_BASE_URL === "https://scam-bot-fwga.onrender.com") {
+                showError("Backend URL not configured. Contact admin."); console.error("CRITICAL: BACKEND_BASE_URL not set!"); return;
             }
 
-            const messageText = userInput.value.trim();
-            if (!messageText) {
-                console.log('UI: Message send blocked: message is empty.');
-                return;
-            }
-            if (isProcessing) {
-                console.log('UI: Message send blocked: already processing.');
-                return;
-            }
-            if (!BACKEND_BASE_URL || BACKEND_BASE_URL === "YOUR_DEPLOYED_BACKEND_URL_HERE") {
-                showError("Backend URL not configured. Please contact support or the developer.");
-                console.error("CRITICAL: BACKEND_BASE_URL is not set!");
-                return;
-            }
-
-
-            console.log('UI: Preparing to send message:', messageText.substring(0, 50) + '...');
-            setProcessing(true);
-            addMessage(messageText, 'user');
-            userInput.value = '';
-
-            const currentSessionIdForRequest = sessionId;
+            console.log('UI: Preparing to send voice transcript:', messageText.substring(0, 50) + '...');
+            setProcessing(true); // This will disable the mic button
+            addMessage(messageText, 'user'); // Display the user's transcribed speech
+            
+            const currentSid = sessionId;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => {
-                    console.warn('UI: Request timed out after 30s');
-                    controller.abort();
-                }, 30000);
-
-                const response = await fetch(`${BACKEND_BASE_URL}/chat`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        message: messageText,
-                        user_id: currentSessionIdForRequest
-                    }),
-                    signal: controller.signal
+                const res = await fetch(`${BACKEND_BASE_URL}/chat`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: messageText, user_id: currentSid }), signal: controller.signal
                 });
-
-                clearTimeout(timeoutId);
-
-                const responseData = await response.json(); // Try to parse JSON regardless of ok status for error details
-
-                if (!response.ok) {
-                    console.error('UI: HTTP error from server!', response.status, responseData.error || responseData.detail || "Unknown server error");
-                    throw new Error(responseData.error || responseData.detail || `Server error: ${response.status}`);
-                }
+                clearTimeout(timeout);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || data.detail || `Server error: ${res.status}`);
                 
-                console.log('UI: API Response received:', responseData);
+                if (data.error) showError(data.error);
+                else if (data.text) addMessage(data.text, 'assistant');
+                else addMessage("Janet seems to be at a loss for words...", 'assistant');
                 
-                if (responseData.error) {
-                    console.error('UI: API Error in response data:', responseData.error);
-                    showError(responseData.error);
-                } else if (responseData.text) {
-                     addMessage(responseData.text, 'assistant');
-                } else {
-                    console.warn("UI: Received response without text or error.");
-                    addMessage("Janet seems to be at a loss for words...", 'assistant');
-                }
-
-                if (responseData.warning) {
-                    console.warn("UI: Server warning:", responseData.warning);
-                    // You could display this warning in a less intrusive way if needed
-                }
-
-                if (responseData.audio) {
-                    console.log('UI: Audio data received, attempting to play.');
+                if (data.warning) console.warn("Server warning:", data.warning);
+                
+                if (data.audio) {
                     try {
-                        const audioObject = new Audio('data:audio/mpeg;base64,' + responseData.audio);
-                        
-                        const audioLoadPromise = new Promise((resolve, reject) => {
-                            const audioTimeout = setTimeout(() => {
-                                console.warn('UI: Audio loading timed out after 7 seconds');
-                                audioObject.onerror = null;
-                                audioObject.oncanplaythrough = null;
-                                reject(new Error('Audio loading timeout'));
-                            }, 7000); // Slightly longer timeout for audio
-
-                            audioObject.oncanplaythrough = () => {
-                                console.log('UI: Audio can play through.');
-                                clearTimeout(audioTimeout);
-                                resolve();
-                            };
-                            audioObject.onerror = (e) => {
-                                console.error('UI: Audio object loading error:', e);
-                                clearTimeout(audioTimeout);
-                                reject(new Error('Audio loading failed'));
-                            };
-                            audioObject.load(); 
+                        const audio = new Audio('data:audio/mpeg;base64,' + data.audio);
+                        const loadPromise = new Promise((resolve, reject) => {
+                            const audioTimeout = setTimeout(() => reject(new Error('Audio loading timeout')), 7000);
+                            audio.oncanplaythrough = () => { clearTimeout(audioTimeout); resolve(); };
+                            audio.onerror = () => { clearTimeout(audioTimeout); reject(new Error('Audio loading failed')); };
+                            audio.load();
                         });
-
-                        await audioLoadPromise;
-                        console.log('UI: Playing audio...');
-                        await audioObject.play();
-                        console.log('UI: Audio playback started/completed.');
-                    } catch (audioError) {
-                        console.error('UI: Audio playback error:', audioError.message);
-                        showError("Could not play Janet's voice reply.");
-                    }
-                } else {
-                    console.log('UI: No audio data in response.');
+                        await loadPromise; await audio.play();
+                    } catch (audioError) { showError("Could not play Janet's voice reply."); console.error("Audio playback error:", audioError); }
                 }
             } catch (error) {
-                console.error('UI: Error in sendMessage:', error.name, error.message);
-                if (error.name === 'AbortError') {
-                    showError('Request timed out. Janet might be busy. Please try again.');
-                } else if (error.message.includes("Failed to fetch")) {
-                    showError('Cannot reach Janet. Check your internet or contact support.');
-                } else {
-                    showError(`Sorry, something went wrong: ${error.message}`);
-                }
+                if (error.name === 'AbortError') showError('Request timed out. Janet might be busy.');
+                else if (error.message.includes("Failed to fetch")) showError('Cannot reach Janet. Check internet or contact admin.');
+                else showError(`Sorry, something went wrong: ${error.message}`);
+                console.error("sendMessage error:", error);
             } finally {
-                setProcessing(false);
-                console.log('UI: sendMessage FINALLY. State:', { isProcessing, isSessionActive, sessionId });
-                userInput.focus();
+                setProcessing(false); // This will re-enable the mic button if session is active
+                // No need to focus on userInput as it's removed
             }
         }
 
         sessionButton.addEventListener('click', () => {
-            console.log('UI: Session button clicked.');
-            if (isProcessing && isSessionActive) {
-                showError('Please wait for Janet to finish her current thought!');
-                return;
-            }
+            if (isProcessing && isSessionActive) { showError('Please wait for Janet to finish!'); return; }
             setSessionActiveState(!isSessionActive);
         });
 
         micButton.addEventListener('click', () => {
-            if (!SpeechRecognition) {
-                showError("Sorry, your browser doesn't support voice input.");
-                return;
-            }
-            console.log('UI: Mic button clicked.');
-            if (isProcessing || !isSessionActive) return;
-            
-            if (!isRecording) {
-                try {
-                    clearError(); // Clear previous errors before starting mic
-                    recognition.start();
-                    micButton.classList.add('recording');
-                    isRecording = true;
-                    console.log('UI: Speech recognition started.');
-                } catch (error) {
-                    console.error('UI: Error starting speech recognition:', error);
-                    if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
-                         showError('Microphone access denied. Please check browser permissions.');
-                    } else {
-                        showError('Could not start voice input. Try again or check mic.');
-                    }
-                    micButton.classList.remove('recording');
-                    isRecording = false;
+            if (!SpeechRecognition) { showError("Voice input not supported."); return; }
+            if (isProcessing || !isSessionActive || isRecording) return; // Don't start if already processing, no session, or already recording
+
+            try {
+                clearError();
+                userTranscriptForDisplay = ""; // Clear any old transcript
+                recognition.start(); // onstart will handle UI changes
+            } catch (e) {
+                console.error("Error starting recognition from micButton click:", e);
+                if (e.name === 'InvalidStateError') { // Already started or starting
+                    console.warn("Recognition already in an active state.");
+                } else if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
+                    showError('Mic access denied. Check browser permissions.');
+                } else {
+                    showError('Could not start voice input. Try again or check mic.');
                 }
-            } else {
-                recognition.stop();
-                console.log('UI: Speech recognition stopped by user.');
+                // Ensure UI consistency if start fails
+                micButton.classList.remove('recording');
+                isRecording = false;
+                micButton.disabled = !isSessionActive || isProcessing;
             }
         });
 
-        sendButton.addEventListener('click', sendMessage);
+        // Text input related event listeners REMOVED
+        // sendButton.addEventListener('click', sendMessage);
+        // userInput.addEventListener('keypress', ...); 
 
-        userInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !isProcessing && isSessionActive && userInput.value.trim()) {
-                e.preventDefault(); // Prevent default newline in some cases
-                console.log('UI: Enter key pressed, sending message.');
-                sendMessage();
-            }
-        });
-
-        // Initial state setup when page loads
-        setSessionActiveState(false);
-        if (!BACKEND_BASE_URL || BACKEND_BASE_URL === "YOUR_DEPLOYED_BACKEND_URL_HERE") {
-            showError("APP NOT CONFIGURED: Backend URL is missing. Please contact the site administrator.");
-            console.error("CRITICAL CONFIGURATION ERROR: BACKEND_BASE_URL is not set in the JavaScript.");
-            sessionButton.disabled = true; // Disable session start if backend is not configured
+        setSessionActiveState(false); // Initialize session as inactive
+        if (!BACKEND_BASE_URL || BACKEND_BASE_URL === "E") {
+            showError("APP NOT CONFIGURED: Backend URL missing. Contact admin.");
+            console.error("CRITICAL: BACKEND_BASE_URL not set!");
+            sessionButton.disabled = true; micButton.disabled = true;
         }
     </script>
 </body>
