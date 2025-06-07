@@ -112,13 +112,22 @@
                 sessionId = 'session_' + Date.now();
                 isSessionActive = true;
                 messageCount = 0;
+                isProcessing = false; // Reset processing flag
+                audioQueue = []; // Clear audio queue
+                isPlayingAudio = false; // Reset audio playback state
+                
                 sessionButton.textContent = 'End Session';
                 sessionButton.classList.remove('bg-green-600', 'hover:bg-green-700');
                 sessionButton.classList.add('bg-red-600', 'hover:bg-red-700');
                 micButton.classList.remove('opacity-50', 'cursor-not-allowed');
                 micButton.disabled = false;
                 chatMessagesContainer.innerHTML = '';
-                addMessage("Hi there! It's Janet... remember me? It's been so long! How ARE you?", 'assistant');
+                
+                // Start with initial message
+                const initialMessage = "Hi there! It's Janet... remember me? It's been so long! How ARE you?";
+                addMessage(initialMessage, 'assistant');
+                await sendMessage(initialMessage); // Send initial message through chat endpoint
+                
                 console.log('Session started with ID:', sessionId);
             } catch (error) {
                 console.error('Error starting session:', error);
@@ -165,11 +174,25 @@
             if (audioQueue.length > 0 && !isPlayingAudio) {
                 const audio = audioQueue.shift();
                 isPlayingAudio = true;
-                audio.play();
-                audio.onended = () => {
+                
+                // Create audio element
+                const audioElement = new Audio(`data:audio/wav;base64,${audio}`);
+                audioElement.addEventListener('error', (error) => {
+                    console.error('Audio playback error:', error);
                     isPlayingAudio = false;
                     playNextInQueue();
-                };
+                });
+                
+                audioElement.addEventListener('ended', () => {
+                    isPlayingAudio = false;
+                    playNextInQueue();
+                });
+                
+                audioElement.play().catch(error => {
+                    console.error('Audio playback error:', error);
+                    isPlayingAudio = false;
+                    playNextInQueue();
+                });
             }
         }
 
