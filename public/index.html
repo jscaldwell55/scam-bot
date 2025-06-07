@@ -50,7 +50,8 @@
   <button id="start-btn">Start Call</button>
   <button id="stop-btn" disabled>End Call</button>
 
-  <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web-sdk@0.1.60/dist/index.umd.js"></script>
+  <!-- Load Vapi SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web@2.3.5/dist/index.umd.js"></script>
 
   <script>
     // Prompt user for microphone access on page load
@@ -61,12 +62,10 @@
     console.log("Attempting to initialize Vapi SDK...");
 
     try {
-      if (typeof Vapi === 'undefined' || typeof Vapi.default === 'undefined') {
+      if (typeof Vapi === 'undefined') {
         console.error("Vapi class is undefined. Check SDK script loading.");
       } else {
-        const vapi = new Vapi.default({
-          apiKey: "1c13d18f-bdb2-4195-9b54-5bd3d7f2be21"
-        });
+        const vapi = new Vapi('1c13d18f-bdb2-4195-9b54-5bd3d7f2be21');
 
         const startBtn = document.getElementById("start-btn");
         const stopBtn = document.getElementById("stop-btn");
@@ -107,11 +106,7 @@
           startBtn.addEventListener("click", () => {
             setStatus("⏳ Starting call...");
             try {
-              vapi.start({
-                assistant: {
-                  id: "a0f2248e-143f-43a0-8130-7f386a16a94a"
-                }
-              });
+              vapi.start('a0f2248e-143f-43a0-8130-7f386a16a94a');
             } catch (error) {
               console.error("Error calling vapi.start():", error);
               setStatus("❌ Failed to start call.");
