@@ -1,0 +1,12 @@
+{
+  "name": "janet-voice-assistant",
+  "version": "1.0.0",
+  "description": "Janet Voice Assistant Frontend",
+  "scripts": {
+    "build": "mkdir -p build && cp -r templates/* build/",
+    "start": "serve build"
+  },
+  "dependencies": {
+    "serve": "^14.0.0"
+  }
+}

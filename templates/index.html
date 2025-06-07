@@ -61,9 +61,15 @@
   <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web@latest/dist/vapi.umd.js"></script>
 
   <script>
-    // Configuration
-    const VAPI_PUBLIC_KEY = '1c13d18f-bdb2-4195-9b54-5bd3d7f2be21';
-    const ASSISTANT_ID = 'a0f2248e-143f-43a0-8130-7f386a16a94a';
+    // Get configuration from environment variables
+    const VAPI_PUBLIC_KEY = window.VAPI_PUBLIC_KEY || '1c13d18f-bdb2-4195-9b54-5bd3d7f2be21';
+    const ASSISTANT_ID = window.ASSISTANT_ID || 'a0f2248e-143f-43a0-8130-7f386a16a94a';
+
+    // Log configuration for debugging
+    console.log('Using VAPI configuration:', {
+        publicKey: VAPI_PUBLIC_KEY,
+        assistantId: ASSISTANT_ID
+    });
 
     // DOM elements
     const callButton = document.getElementById('call-button');
