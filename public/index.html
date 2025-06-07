@@ -1,124 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Janet Scambot - Vapi Test</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      background-color: #f5f5f5;
-    }
-    h1 {
-      margin-bottom: 20px;
-      color: #333;
-    }
-    #status {
-      margin-bottom: 20px;
-      font-size: 18px;
-      color: #666;
-    }
-    button {
-      margin: 10px;
-      padding: 14px 28px;
-      font-size: 16px;
-      cursor: pointer;
-      border: none;
-      border-radius: 6px;
-      background-color: #005eff;
-      color: white;
-      transition: background-color 0.2s ease;
-    }
-    button:hover {
-      background-color: #0041c4;
-    }
-    button:disabled {
-      background-color: #aaa;
-      cursor: not-allowed;
-    }
-  </style>
-</head>
-<body>
-  <h1>Janet Scambot</h1>
-  <div id="status">Awaiting interaction...</div>
-  <button id="start-btn">Start Call</button>
-  <button id="stop-btn" disabled>End Call</button>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Janet Scambot</title>
+  </head>
+  <body>
+    <h1>Janet Scambot (Widget Test)</h1>
 
-  <!-- ✅ Correct working Vapi SDK from unpkg -->
-  <script src="https://unpkg.com/@vapi-ai/web@latest/dist/index.umd.js"></script>
+    <script>
+      var vapiInstance = null;
+      const assistant = "a0f2248e-143f-43a0-8130-7f386a16a94a";
+      const apiKey = "1c13d18f-bdb2-4195-9b54-5bd3d7f2be21";
+      const buttonConfig = {
+        position: "bottom-right", // or "top-left", etc.
+        // You can customize more here: color, size, etc.
+      };
 
-  <script>
-    // Prompt for mic access immediately
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(() => console.log("Microphone permission granted."))
-      .catch(err => console.warn("Microphone permission denied:", err));
+      (function (d, t) {
+        var g = document.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+        g.src =
+          "https://cdn.jsdelivr.net/gh/VapiAI/html-script-tag@latest/dist/assets/index.js";
+        g.defer = true;
+        g.async = true;
+        s.parentNode.insertBefore(g, s);
 
-    console.log("Attempting to initialize Vapi SDK...");
-
-    try {
-      if (typeof Vapi === 'undefined') {
-        console.error("Vapi is undefined. SDK failed to load.");
-      } else {
-        const vapi = new Vapi('1c13d18f-bdb2-4195-9b54-5bd3d7f2be21');
-
-        const startBtn = document.getElementById("start-btn");
-        const stopBtn = document.getElementById("stop-btn");
-        const statusEl = document.getElementById("status");
-
-        const setStatus = (text) => {
-          statusEl.textContent = text;
+        g.onload = function () {
+          vapiInstance = window.vapiSDK.run({
+            apiKey: apiKey,
+            assistant: assistant,
+            config: buttonConfig,
+          });
         };
-
-        vapi.on('call-start', () => {
-          setStatus("🎤 Listening...");
-          startBtn.disabled = true;
-          stopBtn.disabled = false;
-        });
-
-        vapi.on('speech-start', () => setStatus("🗣️ Speaking..."));
-        vapi.on('speech-end', () => setStatus("🎤 Listening..."));
-        vapi.on('call-end', () => {
-          setStatus("✅ Conversation ended.");
-          startBtn.disabled = false;
-          stopBtn.disabled = true;
-        });
-
-        vapi.on('error', (e) => {
-          console.error("Vapi error:", e);
-          setStatus("⚠️ Error occurred.");
-          startBtn.disabled = false;
-          stopBtn.disabled = true;
-        });
-
-        startBtn.addEventListener("click", () => {
-          setStatus("⏳ Starting call...");
-          try {
-            vapi.start('a0f2248e-143f-43a0-8130-7f386a16a94a');
-          } catch (error) {
-            console.error("Error calling vapi.start():", error);
-            setStatus("❌ Failed to start call.");
-          }
-        });
-
-        stopBtn.addEventListener("click", () => {
-          try {
-            vapi.stop();
-            setStatus("🛑 Ending call...");
-          } catch (error) {
-            console.error("Error calling vapi.stop():", error);
-            setStatus("❌ Failed to stop call.");
-          }
-        });
-      }
-    } catch (error) {
-      console.error("Vapi init error:", error);
-    }
-  </script>
-</body>
+      })(document, "script");
+    </script>
+  </body>
 </html>
