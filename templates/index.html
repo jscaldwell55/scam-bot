@@ -6,182 +6,236 @@
     <title>Janet the ScamBot (Voice Only)</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-        body { overscroll-behavior-y: contain; }
-        .chat-container { height: calc(100vh - 180px); display: flex; flex-direction: column; }
-        .message-scroll-area { flex-grow: 1; overflow-y: auto; padding: 8px; }
-        .message { max-width: 80%; margin-bottom: 10px; padding: 10px 15px; border-radius: 15px; word-wrap: break-word; line-height: 1.4; }
-        .user-message { background-color: #DBEAFE; margin-left: auto; color: #1E3A8A; align-self: flex-end; }
-        .assistant-message { background-color: #FCE7F3; margin-right: auto; color: #831843; align-self: flex-start; }
-        .system-message { background-color: #F3F4F6; color: #4B5563; font-style: italic; text-align: center; font-size: 0.875rem; width: 100%; align-self: center; }
+        body { 
+            overscroll-behavior-y: contain;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
         .recording { animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } 100% { opacity: 1; transform: scale(1); } }
-        .error-message { color: #DC2626; font-size: 0.875rem; text-align: center; margin-top: 0.5rem; min-height: 1.5rem; line-height: 1.5rem; }
-        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(0,0,0,.1); border-radius: 50%; border-top-color: #3b82f6; animation: spin 1s ease-in-out infinite; }
+        @keyframes pulse { 
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         button:disabled { opacity: 0.6; cursor: not-allowed; }
-        .session-active { background-color: #10B981 !important; }
-        .session-inactive { background-color: #6B7280 !important; }
         #session-button.session-active { background-color: #EF4444 !important; }
-        #session-button.session-active:hover { background-color: #DC2626 !important; }
+        #session-button.session-active:hover:not(:disabled) { background-color: #DC2626 !important; }
         #session-button.session-inactive { background-color: #10B981 !important; }
-        #session-button.session-inactive:hover { background-color: #059669 !important; }
-        #mic-button.recording { background-color: #EF4444 !important; }
-        #mic-button:not(.recording) { background-color: #3B82F6; }
-        #mic-button:not(.recording):hover:not(:disabled) { background-color: #2563EB; }
-        .mic-button-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        #session-button.session-inactive:hover:not(:disabled) { background-color: #059669 !important; }
+        #mic-button { 
+            width: 120px; 
+            height: 120px; 
+            transition: all 0.3s ease;
         }
+        #mic-button:not(.recording) { background-color: #3B82F6; }
+        #mic-button:not(.recording):hover:not(:disabled) { 
+            background-color: #2563EB; 
+            transform: scale(1.1);
+        }
+        #mic-button.recording { 
+            background-color: #EF4444 !important;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-active { background-color: #10B981; }
+        .status-inactive { background-color: #6B7280; }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans flex flex-col h-screen">
-    <header class="container mx-auto px-4 py-4 max-w-2xl">
-        <div class="flex justify-between items-center">
-            <h1 class="text-2xl sm:text-3xl font-bold text-blue-600">Janet the ScamBot</h1>
-            <button id="session-button" class="session-inactive text-white px-4 py-2 sm:px-6 sm:py-2 rounded-lg shadow-md transition-colors duration-150 ease-in-out text-sm sm:text-base">Start Session</button>
-        </div>
-    </header>
+<body class="flex flex-col items-center justify-center min-h-screen text-white">
+    <div class="text-center mb-8">
+        <h1 class="text-4xl sm:text-5xl font-bold mb-2">Janet the ScamBot</h1>
+        <p class="text-lg opacity-90">Voice Interaction Demo</p>
+    </div>
     
-    <main class="container mx-auto px-4 max-w-2xl flex-grow flex flex-col overflow-hidden">
-        <div class="bg-white rounded-lg shadow-xl p-4 flex flex-col flex-grow">
-            <div id="chat-messages-container" class="chat-container">
-                <div id="chat-messages" class="message-scroll-area"></div>
-            </div>
-            
-            <div class="mt-auto pt-4 border-t border-gray-200">
-                <div class="mic-button-container">
-                    <button id="mic-button" 
-                            class="text-white px-6 py-4 rounded-full shadow-md text-2xl transition-transform hover:scale-105"
-                            disabled title="Start Voice Input">
-                        🎤
-                    </button>
-                </div>
-                <div id="error-container" class="error-message"></div>
-                <div id="loading-indicator" class="text-center mt-2 hidden">
-                    <div class="loading"></div>
-                    <span class="ml-2 text-gray-600">Janet is thinking...</span>
-                </div>
-            </div>
+    <div class="bg-white bg-opacity-20 backdrop-blur-lg rounded-2xl p-8 shadow-2xl">
+        <div class="flex items-center justify-center mb-6">
+            <span class="status-indicator" id="status-indicator"></span>
+            <span id="status-text" class="text-lg">Inactive</span>
         </div>
-    </main>
+        
+        <div class="flex justify-center mb-6">
+            <button id="mic-button" 
+                    class="text-white rounded-full shadow-lg text-4xl font-bold hover:shadow-xl transform transition-all"
+                    disabled title="Start a session first">
+                🎤
+            </button>
+        </div>
+        
+        <button id="session-button" 
+                class="session-inactive text-white px-6 py-3 rounded-lg shadow-md transition-all duration-150 ease-in-out text-lg font-semibold w-full">
+            Start Session
+        </button>
+        
+        <div id="error-container" class="mt-4 text-center text-sm"></div>
+        
+        <div id="loading-indicator" class="text-center mt-4 hidden">
+            <div class="loading mx-auto mb-2"></div>
+            <span class="text-sm opacity-90">Janet is thinking...</span>
+        </div>
+    </div>
 
     <script>
-        // Backend URL configuration - Point to your Render backend
+        // Backend URL configuration
         const BACKEND_BASE_URL = 'https://scam-bot-fwga.onrender.com';
         console.log('Using backend URL:', BACKEND_BASE_URL);
 
         // DOM elements
-        const chatMessagesContainer = document.getElementById('chat-messages');
         const micButton = document.getElementById('mic-button');
         const sessionButton = document.getElementById('session-button');
         const errorContainer = document.getElementById('error-container');
         const loadingIndicator = document.getElementById('loading-indicator');
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
         
         // Session state
         let isRecording = false;
         let isProcessing = false;
         let isSessionActive = false;
         let sessionId = null;
-        let messageCount = 0;
-        let audioQueue = [];
         let isPlayingAudio = false;
-        let userTranscriptForDisplay = "";
+        let currentAudio = null;
 
         // Initialize speech recognition
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition;
 
+        function updateStatus(active, text) {
+            statusIndicator.className = `status-indicator ${active ? 'status-active' : 'status-inactive'}`;
+            statusText.textContent = text || (active ? 'Active' : 'Inactive');
+        }
+
         function showError(message) {
             errorContainer.textContent = message;
-            errorContainer.classList.remove('hidden');
+            errorContainer.style.color = '#FCA5A5';
             setTimeout(() => {
                 errorContainer.textContent = '';
-                errorContainer.classList.add('hidden');
             }, 5000);
         }
 
         function clearError() { 
             errorContainer.textContent = '';
-            errorContainer.classList.add('hidden');
         }
 
         function setProcessing(processing) {
             isProcessing = processing;
-            const disableMic = processing || !isSessionActive || isRecording;
-            micButton.disabled = disableMic;
+            updateMicButtonState();
             loadingIndicator.classList.toggle('hidden', !processing);
-            if (processing) clearError();
+            if (processing) {
+                clearError();
+                updateStatus(true, 'Processing...');
+            } else if (isSessionActive) {
+                updateStatus(true, 'Listening');
+            }
+        }
+
+        function updateMicButtonState() {
+            const shouldDisable = !isSessionActive || isRecording || isProcessing || isPlayingAudio;
+            micButton.disabled = shouldDisable;
+            micButton.title = shouldDisable ? 
+                (!isSessionActive ? 'Start a session first' : 'Please wait...') : 
+                'Click to speak';
         }
 
         function updateSessionButton(active) {
-            if (active) {
-                sessionButton.textContent = 'End Session';
-                sessionButton.classList.remove('session-inactive');
-                sessionButton.classList.add('session-active');
-            } else {
-                sessionButton.textContent = 'Start Session';
-                sessionButton.classList.remove('session-active');
-                sessionButton.classList.add('session-inactive');
-            }
+            sessionButton.textContent = active ? 'End Session' : 'Start Session';
+            sessionButton.classList.toggle('session-active', active);
+            sessionButton.classList.toggle('session-inactive', !active);
+        }
+
+        // Play audio directly without queue management
+        function playAudio(audioBase64) {
+            if (!audioBase64) return;
+            
+            isPlayingAudio = true;
+            updateMicButtonState();
+            updateStatus(true, 'Speaking...');
+            
+            currentAudio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
+            
+            currentAudio.addEventListener('ended', () => {
+                isPlayingAudio = false;
+                currentAudio = null;
+                updateMicButtonState();
+                if (isSessionActive) {
+                    updateStatus(true, 'Listening');
+                }
+            });
+            
+            currentAudio.addEventListener('error', (error) => {
+                console.error('Audio playback error:', error);
+                isPlayingAudio = false;
+                currentAudio = null;
+                updateMicButtonState();
+                if (isSessionActive) {
+                    updateStatus(true, 'Listening');
+                }
+            });
+            
+            currentAudio.play().catch(error => {
+                console.error('Audio play error:', error);
+                isPlayingAudio = false;
+                currentAudio = null;
+                updateMicButtonState();
+            });
         }
 
         // Session management
         async function startSession() {
             try {
-                console.log('Starting new session...');
                 sessionId = 'session_' + Date.now();
                 isSessionActive = true;
-                messageCount = 0;
                 isProcessing = false;
-                audioQueue = [];
-                isPlayingAudio = false;
                 
                 updateSessionButton(true);
-                micButton.disabled = false;
-                chatMessagesContainer.innerHTML = '';
+                updateMicButtonState();
+                updateStatus(true, 'Session started');
+                clearError();
                 
-                // Start with initial message
-                const initialMessage = "Hi there! It's Janet... remember me? It's been so long! How ARE you?";
-                addMessage(initialMessage, 'assistant');
+                // Play initial greeting
+                const greeting = new SpeechSynthesisUtterance("Hi there! It's Janet... remember me? It's been so long! How ARE you?");
+                greeting.rate = 0.9;
+                greeting.pitch = 1.1;
+                window.speechSynthesis.speak(greeting);
                 
-                // Don't send the initial message through the chat endpoint
-                // Just play the audio directly
-                console.log('Session started with ID:', sessionId);
+                console.log('Session started:', sessionId);
                 
             } catch (error) {
                 console.error('Error starting session:', error);
                 showError('Failed to start session');
                 isSessionActive = false;
                 updateSessionButton(false);
+                updateStatus(false);
             }
         }
 
         async function endSession() {
             try {
-                console.log('Ending session:', sessionId);
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
+                }
+                
                 if (sessionId) {
-                    const response = await fetch(`${BACKEND_BASE_URL}/end_session`, {
+                    fetch(`${BACKEND_BASE_URL}/end_session`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ user_id: sessionId })
-                    });
-                    
-                    if (!response.ok) {
-                        console.error('Failed to end session on server');
-                    }
+                    }).catch(err => console.error('Failed to end session on server:', err));
                 }
                 
                 isSessionActive = false;
                 sessionId = null;
-                messageCount = 0;
+                isPlayingAudio = false;
                 updateSessionButton(false);
-                micButton.disabled = true;
-                chatMessagesContainer.innerHTML = '';
-                addMessage("Session ended. Click 'Start Session' to chat with Janet again.", 'system');
-                console.log('Session ended');
+                updateMicButtonState();
+                updateStatus(false, 'Session ended');
                 
             } catch (error) {
                 console.error('Error ending session:', error);
@@ -189,104 +243,48 @@
             }
         }
 
-        // Audio queue management
-        function playNextInQueue() {
-            if (audioQueue.length > 0 && !isPlayingAudio) {
-                const audioData = audioQueue.shift();
-                isPlayingAudio = true;
-                
-                // Create audio element with proper MIME type
-                const audioElement = new Audio(`data:audio/mp3;base64,${audioData}`);
-                
-                audioElement.addEventListener('error', (error) => {
-                    console.error('Audio playback error:', error);
-                    isPlayingAudio = false;
-                    playNextInQueue();
-                });
-                
-                audioElement.addEventListener('ended', () => {
-                    isPlayingAudio = false;
-                    playNextInQueue();
-                });
-                
-                audioElement.play().catch(error => {
-                    console.error('Audio playback error:', error);
-                    isPlayingAudio = false;
-                    playNextInQueue();
-                });
-            }
-        }
-
-        // Message handling
-        function addMessage(content, type = 'user') {
-            const div = document.createElement('div');
-            div.className = `message ${type}-message`;
-            div.textContent = content;
-            chatMessagesContainer.appendChild(div);
-            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
-        }
-
-        // Send message with timeout and retry
+        // Send message to backend
         async function sendMessage(text) {
-            if (!isSessionActive) {
-                showError('Please start a session first');
-                return;
-            }
+            if (!isSessionActive || isProcessing) return;
 
-            if (isProcessing) {
-                showError('Please wait for the current message to finish processing');
-                return;
-            }
-
-            console.log('Sending message:', text);
+            console.log('Sending:', text);
             setProcessing(true);
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000);
 
             try {
                 const response = await fetch(`${BACKEND_BASE_URL}/chat`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         message: text,
                         user_id: sessionId
-                    }),
-                    signal: controller.signal
+                    })
                 });
-
-                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
                 const data = await response.json();
-                console.log('Received response:', data);
+                console.log('Received response');
 
                 if (data.error) {
                     throw new Error(data.error);
                 }
 
-                addMessage(data.text, 'assistant');
-                messageCount++;
-
+                // Play audio immediately if available
                 if (data.audio) {
-                    audioQueue.push(data.audio);
-                    if (!isPlayingAudio) {
-                        playNextInQueue();
-                    }
+                    playAudio(data.audio);
+                } else {
+                    // Fallback to speech synthesis
+                    const utterance = new SpeechSynthesisUtterance(data.text);
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1.1;
+                    window.speechSynthesis.speak(utterance);
                 }
 
             } catch (error) {
-                console.error('Error sending message:', error);
-                if (error.name === 'AbortError') {
-                    showError('Request timed out. Please try again.');
-                } else {
-                    showError(error.message || 'Failed to send message');
-                }
+                console.error('Error:', error);
+                showError(error.message || 'Failed to get response');
             } finally {
                 setProcessing(false);
             }
@@ -300,91 +298,69 @@
             recognition.lang = 'en-US';
 
             recognition.onstart = () => {
-                console.log('Speech recognition started');
+                console.log('Recognition started');
                 micButton.classList.add('recording');
                 isRecording = true;
-                micButton.disabled = true;
+                updateMicButtonState();
+                updateStatus(true, 'Listening...');
                 clearError();
             };
 
             recognition.onresult = (event) => {
-                userTranscriptForDisplay = event.results[0][0].transcript;
-                console.log('Speech recognition result:', userTranscriptForDisplay);
+                const transcript = event.results[0][0].transcript;
+                console.log('Heard:', transcript);
+                sendMessage(transcript);
             };
 
             recognition.onerror = (event) => {
-                console.error('Speech recognition error:', event.error);
-                let errMessage = `Speech error: ${event.error}`;
+                console.error('Recognition error:', event.error);
+                let errMessage = 'Speech error';
                 if (event.error === 'no-speech') errMessage = "Didn't hear anything. Try again?";
-                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') errMessage = "Mic access denied. Check browser permissions.";
-                if (event.error === 'audio-capture') errMessage = "Mic problem. Ensure it's connected & working.";
+                if (event.error === 'not-allowed') errMessage = "Mic access denied";
+                if (event.error === 'audio-capture') errMessage = "Mic problem detected";
                 showError(errMessage);
                 micButton.classList.remove('recording');
                 isRecording = false;
-                setProcessing(false);
-                micButton.disabled = !isSessionActive;
+                updateMicButtonState();
+                if (isSessionActive) updateStatus(true, 'Ready');
             };
 
             recognition.onend = () => {
-                console.log('Speech recognition ended');
+                console.log('Recognition ended');
                 micButton.classList.remove('recording');
                 isRecording = false;
-                micButton.disabled = !isSessionActive || isProcessing;
-
-                if (userTranscriptForDisplay && userTranscriptForDisplay.trim() !== "") {
-                    addMessage(userTranscriptForDisplay.trim(), 'user');
-                    sendMessage(userTranscriptForDisplay.trim());
-                    userTranscriptForDisplay = "";
-                }
+                updateMicButtonState();
             };
-        } else {
-            micButton.disabled = true;
-            micButton.title = "Voice input not supported";
-            showError("Voice input is not supported by your browser");
         }
 
         // Event Listeners
         sessionButton.addEventListener('click', async () => {
-            console.log('Session button clicked');
-            
-            if (isProcessing && isSessionActive) {
-                showError('Please wait for Janet to finish!');
+            if (isProcessing) {
+                showError('Please wait...');
                 return;
             }
             
-            try {
-                if (isSessionActive) {
-                    await endSession();
-                } else {
-                    await startSession();
-                }
-            } catch (error) {
-                console.error('Error handling session:', error);
-                showError('Failed to handle session action');
+            if (isSessionActive) {
+                await endSession();
+            } else {
+                await startSession();
             }
         });
 
         micButton.addEventListener('click', () => {
-            if (!isSessionActive) {
-                showError('Please start a session first');
-                return;
-            }
-            
-            if (isProcessing) {
-                showError('Please wait for the current message to finish processing');
+            if (!isSessionActive || isProcessing || isPlayingAudio) {
                 return;
             }
             
             if (recognition && !isRecording) {
-                console.log('Starting speech recognition...');
                 recognition.start();
             }
         });
 
-        // Initialize the app
-        sessionButton.disabled = false;
-        micButton.disabled = true;
-        console.log('App initialized with backend URL:', BACKEND_BASE_URL);
+        // Initialize
+        updateStatus(false);
+        updateMicButtonState();
+        console.log('App initialized');
     </script>
 </body>
 </html>
